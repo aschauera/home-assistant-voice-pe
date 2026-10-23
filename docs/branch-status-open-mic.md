@@ -1,4 +1,4 @@
-# Branch-Status: `custom-firmware`
+# Branch-Status: `open-mic`
 
 > Agent-Handoff und Arbeitsstand vom 23. Oktober 2026. Vor Änderungen zuerst
 > diesen Stand mit `git status`, `git diff` und den aktuellen CI-Läufen
@@ -17,7 +17,7 @@ Die Implementierung ist **halbduplex**. Barge-in, Full-Duplex und eine eigene
 Voice Activity Detection gehören ausdrücklich nicht zum aktuellen Umfang.
 
 **Wichtig:** Die Hauptlinie dieses Forks heißt `dev`; es gibt keinen
-`main`-Branch. Der Branch `custom-firmware` baut auf `origin/dev` auf und hält
+`main`-Branch. Der Branch `open-mic` baut auf `origin/dev` auf und hält
 die Version 0.2 mit offenem Dialogmodus in logisch getrennten Commits. Neue
 Firmwarearbeit gehört auf diesen Branch und nicht direkt auf `dev`.
 
@@ -27,7 +27,7 @@ Firmwarearbeit gehört auf diesen Branch und nicht direkt auf `dev`.
 |---|---|---|
 | `upstream/dev` | `d4e6fa4` | Offizielle ESPHome-Quellbasis ohne Nanobot-Erweiterungen |
 | `origin/dev` | `b257923` | Hauptlinie des Forks; Merge von PR Nummer eins |
-| `custom-firmware` | `origin/dev` plus eigene Commits | Veröffentlichter Entwicklungsbranch für Version 0.2 |
+| `open-mic` | `origin/dev` plus eigene Commits | Veröffentlichter Entwicklungsbranch für Version 0.2 |
 | `feat/nanobot-led-control` | `9ea10c0` | Alter, bereits gemergter Feature-Branch; Remote-Branch entfernt |
 
 Wesentliche eigene Commits des Branches:
@@ -38,7 +38,7 @@ Wesentliche eigene Commits des Branches:
 - `8efdf91`: Contract-Tests und CI für ESPHome 2026.10.0;
 - `0b1e318`: Anpassung der vendorten Audioquelle an die 2026.10-API.
 
-Der Branch trackt `origin/custom-firmware`. Der Working Tree soll nach dem
+Der Branch trackt `origin/open-mic`. Der Working Tree soll nach dem
 Dokumentations-Commit sauber sein.
 
 ## Vergleich zur Hauptlinie `dev`
@@ -65,9 +65,9 @@ Der Build von `origin/dev` war in GitHub Actions erfolgreich:
 - Artefakte `home-assistant-voice` und `ha-voice-8mb` wurden erzeugt.
 
 Diese grüne CI bestätigt ausschließlich den committed Stand von Version 0.1,
-nicht automatisch den offenen Dialogmodus auf `custom-firmware`.
+nicht automatisch den offenen Dialogmodus auf `open-mic`.
 
-### Auf `custom-firmware` committed: Version 0.2
+### Auf `open-mic` committed: Version 0.2
 
 Der Branch erweitert Version 0.1 um:
 
@@ -234,5 +234,5 @@ gh run list --repo aschauera/home-assistant-voice-pe --limit 10
 ```
 
 Nicht von einer grünen CI auf `origin/dev` auf die Buildfähigkeit von
-`custom-firmware` schließen. Vor jeder strukturellen Änderung zuerst den
+`open-mic` schließen. Vor jeder strukturellen Änderung zuerst den
 Branch-Diff und `docs/dialogmodus.md` vollständig lesen.

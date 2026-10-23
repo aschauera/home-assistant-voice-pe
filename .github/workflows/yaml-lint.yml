@@ -19,8 +19,8 @@ jobs:
       - name: 🚀 Run yamllint
         run: yamllint --strict .
 
-  custom-firmware-tests:
-    name: Custom firmware contract tests
+  open-mic-contract-tests:
+    name: Open mic firmware contract tests
     runs-on: ubuntu-latest
     steps:
       - name: Check out configuration
