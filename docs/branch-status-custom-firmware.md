@@ -135,11 +135,13 @@ API-Hook.
 
 ## Vendorte ESPHome-Komponente
 
-`custom_components/voice_assistant/voice_assistant.cpp` und `.h` sind eine
-unveränderte Momentaufnahme aus `esphome/esphome`, PR `19408`, Commit
-`04caa3846f3e94b51dd2de3ca25c5d935aa992da`. Die Komponente verhindert, dass
-Continuous Mode das Mikrofon erneut öffnet, bevor eine verspätet gestartete
-oder noch laufende TTS-Ausgabe wirklich beendet ist.
+`custom_components/voice_assistant/voice_assistant.h` stammt unverändert aus
+`esphome/esphome`, PR `19408`, Commit
+`04caa3846f3e94b51dd2de3ca25c5d935aa992da`. Die C++-Datei enthält dieselbe
+Korrektur mit drei mechanischen ESPHome-2026.10.0-Anpassungen von `fill(0)` auf
+`fill(0, false)`. Die Komponente verhindert, dass Continuous Mode das Mikrofon
+erneut öffnet, bevor eine verspätet gestartete oder noch laufende TTS-Ausgabe
+wirklich beendet ist.
 
 `__init__.py` basiert auf ESPHome 2026.10.0 und ergänzt die dazugehörige
 Codegen-Option `tts_playback_start_timeout`. Details und Prüfsummen stehen in

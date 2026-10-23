@@ -51,7 +51,7 @@ class CustomFirmwareContractTest(unittest.TestCase):
 
     def test_vendored_cpp_matches_reviewed_upstream_commit(self) -> None:
         expected = {
-            "voice_assistant.cpp": "b3506dcb44c7616c202e86ff2cd57cba31fb7aafd874414504a90827b1dd9535",
+            "voice_assistant.cpp": "9972e4e99cd3533c02dfee34dd55c0635df041ce110dfc1509ea9f0ac14a77ef",
             "voice_assistant.h": "3712f58b5cb4bcd969026a722b13887273bec4bd24de1072b1f411ef5af4573a",
         }
         component = ROOT / "custom_components/voice_assistant"
