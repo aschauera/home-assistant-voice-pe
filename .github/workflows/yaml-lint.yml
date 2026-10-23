@@ -2,11 +2,12 @@ name: YAML lint
 
 on:
   push:
-    branches: [main]
+    branches: [dev]
     paths:
       - "**.yaml"
       - "**.yml"
   pull_request:
+  workflow_dispatch:
 
 jobs:
   yamllint:
@@ -17,3 +18,12 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
       - name: 🚀 Run yamllint
         run: yamllint --strict .
+
+  custom-firmware-tests:
+    name: Custom firmware contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out configuration
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - name: Run contract tests
+        run: python3 -m unittest discover -s tests -v

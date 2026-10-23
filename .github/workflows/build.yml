@@ -22,4 +22,4 @@ jobs:
       files: |
         home-assistant-voice.factory.yaml
         home-assistant-voice.8mb.yaml
-      esphome-version: 2026.9.0
+      esphome-version: 2026.10.0
