@@ -35,7 +35,8 @@ Wesentliche eigene Commits des Branches:
 - `d897294`: Agent-Handoff und Branch-Dokumentation;
 - `df01e05`: vendorter Voice-Assistant-Playback-Fix;
 - `46e5a27`: begrenzter offener Dialogmodus und lokales ACK-Audio;
-- `8efdf91`: Contract-Tests und CI für ESPHome 2026.10.0.
+- `8efdf91`: Contract-Tests und CI für ESPHome 2026.10.0;
+- `0b1e318`: Anpassung der vendorten Audioquelle an die 2026.10-API.
 
 Der Branch trackt `origin/custom-firmware`. Der Working Tree soll nach dem
 Dokumentations-Commit sauber sein.
@@ -173,18 +174,29 @@ Firmware-Repository und ist noch nicht als End-to-End-Verhalten verifiziert.
 Am 23. Oktober 2026 wurde geprüft:
 
 - `python3 -m unittest discover -s tests -v`: **fünf von fünf Tests bestanden**;
-- `yamllint`: im aktuellen Shell-Environment nicht installiert;
-- `esphome`: im aktuellen Shell-Environment nicht auf dem `PATH`;
-- lokaler Buildordner `.esphome/build/home-assistant-voice/` vorhanden;
-- darin nur ein partielles `ota_data_initial.bin`, aber kein vollständiges
-  Firmware-Binary oder ELF gefunden;
-- kein laufender ESPHome-/PlatformIO-Buildprozess;
-- vor dem Push war noch keine GitHub-CI für den Version-0.2-Stand vorhanden;
-  maßgeblich sind die nach dem Push manuell gestarteten Branch-Workflows.
+- YAML-Lint und Contract-Tests: GitHub-Actions-Run `39963914491` erfolgreich;
+- Firmware-Build: GitHub-Actions-Run `39963909725` erfolgreich;
+- `home-assistant-voice.factory.yaml` mit ESPHome 2026.10.0 kompiliert;
+- `home-assistant-voice.8mb.yaml` mit ESPHome 2026.10.0 kompiliert;
+- beide Artefaktarchive entpackt und ihre Manifeste geprüft;
+- beide Manifeste melden Projektversion `0.2.0-dev` und Chipfamilie `ESP32-S3`.
 
-Daraus folgt: Die statischen Verträge sind grün, aber Version 0.2 ist noch
-**nicht vollständig kompiliert, nicht als CI-Artefakt geprüft und nicht auf
-Hardware validiert**.
+Wichtige Firmware-Prüfsummen:
+
+| Datei | SHA-256 |
+|---|---|
+| `home-assistant-voice-esp32s3.factory.bin` | `bbe437a766ec0be965f628c6b3fdfe6b56ddb63638bc9deff00680e4b6fffcdd` |
+| `home-assistant-voice-esp32s3.ota.bin` | `f58649231b7974fe5e7ddebfdc0fab2e72c96405e58868be5db853e46c1d8885` |
+| `ha-voice-8mb-esp32s3.factory.bin` | `11aeec5f7699936eaa7efcbf67ef35c37c887c02d19a3d8678b920001794d917` |
+| `ha-voice-8mb-esp32s3.ota.bin` | `240b37f2c2abd4545fdc218a0057511f8b72aa492c4839f2b50a28d61c7e69ee` |
+
+Der erste Build-Run `39962290987` scheiterte an drei veralteten Aufrufen von
+`RingBufferAudioSource::fill(0)`. Commit `0b1e318` passte diese entsprechend der
+ESPHome-2026.10.0-API auf `fill(0, false)` an; der anschließende vollständige
+Build war grün.
+
+Daraus folgt: Version 0.2 ist statisch geprüft, vollständig kompiliert und als
+CI-Artefakt inspiziert, aber noch **nicht auf Hardware validiert**.
 
 ## Produktionsstatus und Sicherheitsgrenze
 
@@ -204,17 +216,12 @@ Aschi aktualisiert werden.**
 
 ## Sichere nächste Schritte
 
-1. `home-assistant-voice.factory.yaml` und
-   `home-assistant-voice.8mb.yaml` mit ESPHome 2026.10.0 vollständig in CI
-   bauen.
-2. CI-Artefakte entpacken und Manifest, Dateinamen, Größen und Checksummen
-   dokumentieren.
-3. Den Remote-ACK-Hook in der Nanobot-Conversation-Integration separat
+1. Den Remote-ACK-Hook in der Nanobot-Conversation-Integration separat
    implementieren und testen.
-4. Zustandsübergänge, Exit-Pfade, lange/verspätete TTS und Selbsthören zunächst
+2. Zustandsübergänge, Exit-Pfade, lange/verspätete TTS und Selbsthören zunächst
    auf Nicht-Produktionshardware oder in einer kontrollierten Testumgebung
    validieren.
-5. Erst danach eine explizite Flash-Freigabe einholen.
+3. Erst danach eine explizite Flash-Freigabe einholen.
 
 ## Schnelle Wiederaufnahme für Agents
 
