@@ -17,15 +17,9 @@ Die Implementierung ist **halbduplex**. Barge-in, Full-Duplex und eine eigene
 Voice Activity Detection gehören ausdrücklich nicht zum aktuellen Umfang.
 
 **Wichtig:** Die Hauptlinie dieses Forks heißt `dev`; es gibt keinen
-`main`-Branch. Der lokale Branch `custom-firmware` enthält derzeit zwei klar zu
-trennende Ebenen:
-
-1. Der Commit `b257923` entspricht exakt `origin/dev` und enthält die bereits
-   gemergte Version 0.1 mit Nanobot-LED-Overrides.
-2. Die Version 0.2 mit offenem Dialogmodus liegt darüber aktuell vollständig im
-   **uncommitteten Working Tree**. Diese Änderungen dürfen nicht durch
-   `reset --hard`, `clean`, Checkout eines anderen Branches oder pauschales
-   Wiederherstellen verworfen werden.
+`main`-Branch. Der Branch `custom-firmware` baut auf `origin/dev` auf und hält
+die Version 0.2 mit offenem Dialogmodus in logisch getrennten Commits. Neue
+Firmwarearbeit gehört auf diesen Branch und nicht direkt auf `dev`.
 
 ## Branch- und Remote-Beziehungen
 
@@ -33,13 +27,18 @@ trennende Ebenen:
 |---|---|---|
 | `upstream/dev` | `d4e6fa4` | Offizielle ESPHome-Quellbasis ohne Nanobot-Erweiterungen |
 | `origin/dev` | `b257923` | Hauptlinie des Forks; Merge von PR Nummer eins |
-| `custom-firmware` | `b257923` plus Working Tree | Lokaler Entwicklungsbranch für Version 0.2 |
+| `custom-firmware` | `origin/dev` plus eigene Commits | Veröffentlichter Entwicklungsbranch für Version 0.2 |
 | `feat/nanobot-led-control` | `9ea10c0` | Alter, bereits gemergter Feature-Branch; Remote-Branch entfernt |
 
-Der lokale Branch `custom-firmware` hat zum Zeitpunkt dieses Dokuments noch
-keinen eigenen Commit gegenüber `origin/dev` und trackt technisch
-`origin/dev`. Sein fachlicher Mehrwert steckt derzeit in den uncommitteten
-Dateien.
+Wesentliche eigene Commits des Branches:
+
+- `d897294`: Agent-Handoff und Branch-Dokumentation;
+- `df01e05`: vendorter Voice-Assistant-Playback-Fix;
+- `46e5a27`: begrenzter offener Dialogmodus und lokales ACK-Audio;
+- `8efdf91`: Contract-Tests und CI für ESPHome 2026.10.0.
+
+Der Branch trackt `origin/custom-firmware`. Der Working Tree soll nach dem
+Dokumentations-Commit sauber sein.
 
 ## Vergleich zur Hauptlinie `dev`
 
@@ -65,11 +64,11 @@ Der Build von `origin/dev` war in GitHub Actions erfolgreich:
 - Artefakte `home-assistant-voice` und `ha-voice-8mb` wurden erzeugt.
 
 Diese grüne CI bestätigt ausschließlich den committed Stand von Version 0.1,
-nicht den offenen Dialogmodus im aktuellen Working Tree.
+nicht automatisch den offenen Dialogmodus auf `custom-firmware`.
 
-### Nur im Working Tree von `custom-firmware`: Version 0.2
+### Auf `custom-firmware` committed: Version 0.2
 
-Der uncommittete Stand erweitert Version 0.1 um:
+Der Branch erweitert Version 0.1 um:
 
 - Konfigurationsschalter `Open dialog mode`, standardmäßig aktiv;
 - Wake-freie Folgeturns über `voice_assistant.start_continuous`;
@@ -178,7 +177,8 @@ Am 23. Oktober 2026 wurde geprüft:
 - darin nur ein partielles `ota_data_initial.bin`, aber kein vollständiges
   Firmware-Binary oder ELF gefunden;
 - kein laufender ESPHome-/PlatformIO-Buildprozess;
-- keine GitHub-CI für den uncommitteten Version-0.2-Stand vorhanden.
+- vor dem Push war noch keine GitHub-CI für den Version-0.2-Stand vorhanden;
+  maßgeblich sind die nach dem Push manuell gestarteten Branch-Workflows.
 
 Daraus folgt: Die statischen Verträge sind grün, aber Version 0.2 ist noch
 **nicht vollständig kompiliert, nicht als CI-Artefakt geprüft und nicht auf
@@ -186,7 +186,7 @@ Hardware validiert**.
 
 ## Produktionsstatus und Sicherheitsgrenze
 
-Das Küchengerät ist das einzige Produktionsgerät. Von diesem Working Tree wurde
+Das Küchengerät ist das einzige Produktionsgerät. Von diesem Branch wurde
 nichts geflasht. Ein erfolgreicher Build allein ist noch keine
 Installationsfreigabe.
 
@@ -202,21 +202,17 @@ Aschi aktualisiert werden.**
 
 ## Sichere nächste Schritte
 
-1. Working Tree unverändert sichern; keinesfalls bereinigen oder hart
-   zurücksetzen.
-2. Änderungen fachlich in getrennte Commits aufteilen, beispielsweise:
-   vendorte Komponente, Dialogfunktion, Tests/CI und Dokumentation.
-3. Den Branch `custom-firmware` als eigenen Remote-Branch veröffentlichen.
-4. `home-assistant-voice.factory.yaml` und
-   `home-assistant-voice.8mb.yaml` mit ESPHome 2026.10.0 vollständig bauen.
-5. CI-Artefakte entpacken und Manifest, Dateinamen, Größen und Checksummen
+1. `home-assistant-voice.factory.yaml` und
+   `home-assistant-voice.8mb.yaml` mit ESPHome 2026.10.0 vollständig in CI
+   bauen.
+2. CI-Artefakte entpacken und Manifest, Dateinamen, Größen und Checksummen
    dokumentieren.
-6. Den Remote-ACK-Hook in der Nanobot-Conversation-Integration separat
+3. Den Remote-ACK-Hook in der Nanobot-Conversation-Integration separat
    implementieren und testen.
-7. Zustandsübergänge, Exit-Pfade, lange/verspätete TTS und Selbsthören zunächst
+4. Zustandsübergänge, Exit-Pfade, lange/verspätete TTS und Selbsthören zunächst
    auf Nicht-Produktionshardware oder in einer kontrollierten Testumgebung
    validieren.
-8. Erst danach eine explizite Flash-Freigabe einholen.
+5. Erst danach eine explizite Flash-Freigabe einholen.
 
 ## Schnelle Wiederaufnahme für Agents
 
@@ -228,6 +224,6 @@ python3 -m unittest discover -s tests -v
 gh run list --repo aschauera/home-assistant-voice-pe --limit 10
 ```
 
-Nicht von einer grünen CI auf `origin/dev` auf die Buildfähigkeit des Working
-Trees schließen. Vor jeder strukturellen Änderung zuerst die uncommitteten
-Dateien und `docs/dialogmodus.md` vollständig lesen.
+Nicht von einer grünen CI auf `origin/dev` auf die Buildfähigkeit von
+`custom-firmware` schließen. Vor jeder strukturellen Änderung zuerst den
+Branch-Diff und `docs/dialogmodus.md` vollständig lesen.

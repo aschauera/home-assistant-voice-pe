@@ -5,6 +5,29 @@ This repository is a focused fork of the official ESPHome source code for the
 The upstream project remains available at
 [`esphome/home-assistant-voice-pe`](https://github.com/esphome/home-assistant-voice-pe).
 
+## Offener Dialogmodus
+
+Die Custom Firmware unterstützt einen begrenzten halbduplexen Dialog über die
+bestehende Home-Assistant-Assist-Pipeline. Ein Wake Word öffnet die Session;
+nach jeder Antwort wartet das Gerät ohne neues Wake Word auf den nächsten Turn.
+`Stop`, definierte Exit-Phrasen, Mute, die mittlere Taste, Fehler, zwei Minuten
+Laufzeit oder zwanzig Turns beenden sie.
+
+Die LED-Anzeige macht jede Phase sichtbar: Grün öffnet oder beendet die Session,
+Violett wartet auf einen Folgeturn, die native blaue Animation hört zu, Amber
+verarbeitet, ein kurzer blauer Puls bestätigt den Remote-Agenten, Cyan spricht
+und Rot signalisiert einen Fehler. Der Diagnosesensor `Dialog state` zeigt den
+Zustand zusätzlich in Home Assistant.
+
+Eine eingebettete lokale Ansage „Einen Moment.“ kann über die ESPHome-Aktion
+`dialog_remote_ack` ausgelöst werden. Die Conversation-Agent-Integration muss
+diesen Hook erst nach erfolglosem Local-Intent-Routing aufrufen; die Firmware
+selbst kann lokal und remote nicht unterscheiden.
+
+Architektur, Zustandsübergänge, LED-Prioritäten, Integrationsvertrag, Grenzen
+und Rollback sind in [`docs/dialogmodus.md`](docs/dialogmodus.md) dokumentiert.
+Barge-in und Full-Duplex sind ausdrücklich nicht Bestandteil dieser Version.
+
 ## Nanobot LED override
 
 The firmware exposes a **Nanobot LED state** select entity to Home Assistant.
@@ -28,7 +51,7 @@ a 90-second fail-safe and boot always starts with the override disabled.
 Home Assistant can drive the state with `select.select_option`, for example:
 
 ```yaml
-service: select.select_option
+action: select.select_option
 target:
   entity_id: select.home_assistant_voice_0a6c07_nanobot_led_state
 data:
@@ -39,8 +62,8 @@ The exact entity ID is assigned by Home Assistant and may differ.
 
 ## Building and installing
 
-The GitHub Actions **Build** workflow validates both firmware variants and
-publishes build artifacts. The custom firmware intentionally disables the
+The GitHub Actions **Build** workflow validates both firmware variants with
+ESPHome 2026.10.0 and publishes build artifacts. The custom firmware intentionally disables the
 official HTTP updater so an upstream release cannot silently overwrite it;
 future updates are installed through ESPHome OTA or USB.
 
