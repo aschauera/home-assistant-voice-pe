@@ -1,8 +1,9 @@
-# Branch-Status: `open-mic`
+# Historischer Branch-Status: `open-mic`
 
-> Agent-Handoff und Arbeitsstand vom 23. Oktober 2026. Vor Änderungen zuerst
-> diesen Stand mit `git status`, `git diff` und den aktuellen CI-Läufen
-> abgleichen.
+> Der Branch wurde für Firmware `0.2.0` nach `dev` übernommen. Dieses Dokument
+> bleibt als Implementierungs- und Provenienznachweis erhalten. Aktuelle Arbeit
+> beginnt auf einem neuen Feature-Branch von `dev`; Release-Kopplung siehe
+> [`release-pairing.md`](release-pairing.md).
 
 ## Kurzfassung
 
@@ -17,18 +18,17 @@ Die Implementierung ist **halbduplex**. Barge-in, Full-Duplex und eine eigene
 Voice Activity Detection gehören ausdrücklich nicht zum aktuellen Umfang.
 
 **Wichtig:** Die Hauptlinie dieses Forks heißt `dev`; es gibt keinen
-`main`-Branch. Der Branch `open-mic` baut auf `origin/dev` auf und hält
-die Version 0.2 mit offenem Dialogmodus in logisch getrennten Commits. Neue
-Firmwarearbeit gehört auf diesen Branch und nicht direkt auf `dev`.
+`main`-Branch. Open Mic ist ab Version `0.2.0` Teil dieser Hauptlinie. Neue
+Firmwarearbeit wird von `dev` abgezweigt und per Merge-Commit zurückgeführt.
 
-## Branch- und Remote-Beziehungen
+## Historische Branch-Beziehungen
 
-| Referenz | Stand | Bedeutung |
-|---|---|---|
-| `upstream/dev` | `d4e6fa4` | Offizielle ESPHome-Quellbasis ohne Nanobot-Erweiterungen |
-| `origin/dev` | `b257923` | Hauptlinie des Forks; Merge von PR Nummer eins |
-| `open-mic` | `origin/dev` plus eigene Commits | Veröffentlichter Entwicklungsbranch für Version 0.2 |
-| `feat/nanobot-led-control` | `9ea10c0` | Alter, bereits gemergter Feature-Branch; Remote-Branch entfernt |
+| Referenz | Bedeutung |
+|---|---|
+| `upstream/dev` | Offizielle ESPHome-Quellbasis ohne Nanobot-Erweiterungen |
+| `origin/dev` | Hauptlinie des Forks einschließlich Open Mic ab Version 0.2 |
+| `open-mic` | Historischer Entwicklungsbranch für Version 0.2 |
+| `feat/nanobot-led-control` | Alter, bereits gemergter Feature-Branch |
 
 Wesentliche eigene Commits des Branches:
 
@@ -89,7 +89,7 @@ Der Branch erweitert Version 0.1 um:
   Amber für Verarbeitung, Blau für Remote-ACK, Cyan für Antwort und Rot für
   Fehler;
 - Upgrade der Konfiguration und CI auf ESPHome `2026.10.0`;
-- Projektversion `0.2.0-dev` für Factory- und Acht-Megabyte-Variante;
+- Projektversion `0.2.0` für Factory- und Acht-Megabyte-Variante;
 - lokal vendorte `voice_assistant`-Komponente als Playback-Race-Fix;
 - Contract-Tests und erweiterte YAML-Lint-CI.
 

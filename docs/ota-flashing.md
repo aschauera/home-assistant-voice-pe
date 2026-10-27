@@ -7,8 +7,8 @@ verändert die im Home-Assistant-ESPHome-Device-Builder gespeicherte YAML nicht.
 ## Sicherheits- und Kompatibilitätsgrenzen
 
 - Nur das Versionspaar verwenden:
-  - Voice-PE-Firmware `0.2.0-open-mic` aus diesem Repository;
-  - HA Voice Bridge `v1.4.0` aus dem Branch `open-mic` von
+  - Voice-PE-Firmware `0.2.0` aus diesem Repository;
+  - HA Voice Bridge `v1.4.1` aus dem Default-Branch `main` von
     `aschauera/NanoBotSkills`.
 - Für OTA immer `home-assistant-voice-esp32s3.ota.bin` verwenden.
 - `home-assistant-voice-esp32s3.factory.bin` ist für USB-Erstinstallation oder
@@ -28,7 +28,7 @@ Benötigt werden:
 - GitHub CLI `gh`, angemeldet für den Zugriff auf das Repository;
 - Netzwerkzugriff vom ausführenden Rechner zum Voice PE;
 - die IP-Adresse des Voice PE;
-- ein lokaler Checkout dieses Repositorys auf dem Branch `open-mic`.
+- ein lokaler Checkout dieses Repositorys auf dem Default-Branch `dev`.
 
 Auf dem Nanobot-Pi ist der bekannte Checkout:
 
@@ -44,7 +44,7 @@ ermittelt werden. Nicht raten und nicht dauerhaft in das Repository schreiben.
 `VOICE_PE_IP` vor dem Ausführen durch die tatsächliche IP-Adresse ersetzen:
 
 ```bash
-export FIRMWARE_RELEASE="0.2.0-open-mic"
+export FIRMWARE_RELEASE="0.2.0"
 export FIRMWARE_REPO="/home/nanobot/home-assistant-voice-pe"
 export FIRMWARE_DIR="$HOME/Downloads/voice-pe-$FIRMWARE_RELEASE"
 export VOICE_PE_IP="192.168.4.REPLACE_ME"
@@ -54,12 +54,12 @@ Branch und Working Tree prüfen:
 
 ```bash
 cd "$FIRMWARE_REPO"
-git switch open-mic
+git switch dev
 git pull --ff-only
 git status --short --branch
 ```
 
-Der Working Tree muss sauber sein und `open-mic...origin/open-mic` anzeigen.
+Der Working Tree muss sauber sein und `dev...origin/dev` anzeigen.
 
 ## 2. Release herunterladen
 
@@ -84,7 +84,7 @@ grep "  home-assistant-voice-$FIRMWARE_RELEASE.zip$" SHA256SUMS.txt \
 Erwartete Ausgabe:
 
 ```text
-home-assistant-voice-0.2.0-open-mic.zip: OK
+home-assistant-voice-0.2.0.zip: OK
 ```
 
 Archiv entpacken:
@@ -118,12 +118,9 @@ print("OTA-Prüfsumme: OK")
 PY
 ```
 
-Für Release `0.2.0-open-mic` lautet die erwartete Prüfsumme des
-Standard-OTA-Abbilds:
-
-```text
-9feea8888d278104ea28b70f21f0b02cd303129ee77e470ee87dc6ea22fce8fa
-```
+Die konkrete Prüfsumme ist releasegebunden und wird deshalb nicht aus älterer
+Dokumentation übernommen. Maßgeblich sind ausschließlich `SHA256SUMS.txt` und
+das `manifest.json` desselben Releases.
 
 ## 4. ESPHome CLI in einer isolierten Umgebung installieren
 
@@ -242,7 +239,7 @@ Ein USB-Recovery kann eine erneute Einrichtung oder Adoption erfordern.
 Das beim Bridge-Deployment genannte Backup verwenden:
 
 ```bash
-python3 /home/nanobot/NanoBotSkills-open-mic/scripts/deploy_ha_voice_release.py \
+python3 /home/nanobot/NanoBotSkills/scripts/deploy_ha_voice_release.py \
   --rollback /home/nanobot/.nanobot/backups/ha-voice/<BACKUP>
 sudo systemctl restart nanobot
 ```
