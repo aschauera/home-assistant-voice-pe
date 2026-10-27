@@ -5,6 +5,32 @@ This repository is a focused fork of the official ESPHome source code for the
 The upstream project remains available at
 [`esphome/home-assistant-voice-pe`](https://github.com/esphome/home-assistant-voice-pe).
 
+> [!IMPORTANT]
+> Der Open-Mic-Modus ist ab Firmware `0.2.0` Bestandteil des Default-Branches `dev`. Die kompatible HA Voice Bridge ist [`v1.4.1`](https://github.com/aschauera/NanoBotSkills/releases/tag/v1.4.1) aus `aschauera/NanoBotSkills:main`. Firmware- und Bridge-Releases müssen einander in ihren Release-Notes direkt verlinken.
+
+## Offener Dialogmodus
+
+Die Custom Firmware unterstützt einen begrenzten halbduplexen Dialog über die
+bestehende Home-Assistant-Assist-Pipeline. Ein Wake Word öffnet die Session;
+nach jeder Antwort wartet das Gerät ohne neues Wake Word auf den nächsten Turn.
+`Stop`, definierte Exit-Phrasen, Mute, die mittlere Taste, Fehler, zwei Minuten
+Laufzeit oder zwanzig Turns beenden sie.
+
+Die LED-Anzeige macht jede Phase sichtbar: Grün öffnet oder beendet die Session,
+Violett wartet auf einen Folgeturn, die native blaue Animation hört zu, Amber
+verarbeitet, ein kurzer blauer Puls bestätigt den Remote-Agenten, Cyan spricht
+und Rot signalisiert einen Fehler. Der Diagnosesensor `Dialog state` zeigt den
+Zustand zusätzlich in Home Assistant.
+
+Eine eingebettete lokale Ansage „Einen Moment.“ kann über die ESPHome-Aktion
+`dialog_remote_ack` ausgelöst werden. Die Conversation-Agent-Integration muss
+diesen Hook erst nach erfolglosem Local-Intent-Routing aufrufen; die Firmware
+selbst kann lokal und remote nicht unterscheiden.
+
+Architektur, Zustandsübergänge, LED-Prioritäten, Integrationsvertrag, Grenzen
+und Rollback sind in [`docs/dialogmodus.md`](docs/dialogmodus.md) dokumentiert.
+Barge-in und Full-Duplex sind ausdrücklich nicht Bestandteil dieser Version.
+
 ## Nanobot LED override
 
 The firmware exposes a **Nanobot LED state** select entity to Home Assistant.
@@ -28,7 +54,7 @@ a 90-second fail-safe and boot always starts with the override disabled.
 Home Assistant can drive the state with `select.select_option`, for example:
 
 ```yaml
-service: select.select_option
+action: select.select_option
 target:
   entity_id: select.home_assistant_voice_0a6c07_nanobot_led_state
 data:
@@ -39,8 +65,8 @@ The exact entity ID is assigned by Home Assistant and may differ.
 
 ## Building and installing
 
-The GitHub Actions **Build** workflow validates both firmware variants and
-publishes build artifacts. The custom firmware intentionally disables the
+The GitHub Actions **Build** workflow validates both firmware variants with
+ESPHome 2026.10.0 and publishes build artifacts. The custom firmware intentionally disables the
 official HTTP updater so an upstream release cannot silently overwrite it;
 future updates are installed through ESPHome OTA or USB.
 
@@ -49,6 +75,50 @@ the workflow artifact and use `home-assistant-voice-esp32s3.factory.bin` for the
 initial USB installation. Keep the official web installer as the rollback path:
 
 https://esphome.github.io/home-assistant-voice-pe/
+
+### Vorkompiliertes Release per OTA installieren
+
+Die vollständige agentenlesbare Anleitung mit Download, Prüfsummenprüfung,
+Erreichbarkeitstest, Upload, Verifikation und Rollback steht unter
+[`docs/ota-flashing.md`](docs/ota-flashing.md). Die verbindliche Zuordnung von
+Firmware- und Bridge-Releases steht unter
+[`docs/release-pairing.md`](docs/release-pairing.md).
+
+Kurzablauf für das Standard-Voice-PE; `VOICE_PE_IP` durch die echte Adresse
+ersetzen und das Produktionsgerät nur nach ausdrücklicher Freigabe flashen:
+
+```bash
+export FIRMWARE_RELEASE="0.2.0"
+export FIRMWARE_REPO="/home/nanobot/home-assistant-voice-pe"
+export FIRMWARE_DIR="$HOME/Downloads/voice-pe-$FIRMWARE_RELEASE"
+export VOICE_PE_IP="192.168.4.REPLACE_ME"
+
+mkdir -p "$FIRMWARE_DIR"
+cd "$FIRMWARE_DIR"
+gh release download "$FIRMWARE_RELEASE" \
+  --repo aschauera/home-assistant-voice-pe \
+  --pattern "home-assistant-voice-$FIRMWARE_RELEASE.zip" \
+  --pattern "SHA256SUMS.txt" \
+  --clobber
+grep "  home-assistant-voice-$FIRMWARE_RELEASE.zip$" SHA256SUMS.txt \
+  | sha256sum -c -
+unzip -o "home-assistant-voice-$FIRMWARE_RELEASE.zip"
+
+python3 -m venv "$HOME/.venvs/esphome-2026.10.0"
+source "$HOME/.venvs/esphome-2026.10.0/bin/activate"
+python -m pip install "esphome==2026.10.0"
+
+esphome upload "$FIRMWARE_REPO/home-assistant-voice.yaml" \
+  --device "$VOICE_PE_IP" \
+  --file "$FIRMWARE_DIR/home-assistant-voice-esp32s3.ota.bin" \
+  --ota-platform esphome
+```
+
+Für OTA ausschließlich die Datei mit dem Suffix `.ota.bin` verwenden. Die
+`.factory.bin` ist für USB-Installation oder Recovery bestimmt. Ein CLI-OTA
+löscht die Gerätekonfiguration im ESPHome Device Builder nicht; ein späteres
+`Install -> Wirelessly` aus dessen Weboberfläche kann die Custom Firmware aber
+mit der dort gespeicherten YAML überschreiben.
 
 For upstream setup and troubleshooting, see
 https://voice-pe.home-assistant.io/.

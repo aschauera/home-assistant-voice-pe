@@ -33,12 +33,15 @@ substitutions:
   easter_egg_tick_sound_file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/easter_egg_tick.mp3
   easter_egg_tada_sound_file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/easter_egg_tada.mp3
   error_cloud_expired_sound_file: https://github.com/esphome/home-assistant-voice-pe/raw/dev/sounds/error_cloud_expired.mp3
+  # Pre-rendered de-AT acknowledgement. It is played locally only when the
+  # configured remote conversation agent explicitly invokes the API action.
+  remote_ack_sound_file: sounds/remote_ack_einen_moment.mp3
 
 esphome:
   name: home-assistant-voice
   friendly_name: Home Assistant Voice
   name_add_mac_suffix: true
-  min_version: 2026.9.0
+  min_version: 2026.10.0
   on_boot:
     priority: 375
     then:
@@ -107,6 +110,18 @@ logger:
 
 api:
   id: api_id
+  actions:
+    # Call this only after Home Assistant has exhausted local intents and has
+    # selected the configured remote conversation agent. The acknowledgement
+    # itself is embedded in the firmware, so it has no TTS/network latency.
+    - action: dialog_remote_ack
+      description: Play the local remote-agent acknowledgement for an active dialog
+      then:
+        - if:
+            condition:
+              lambda: return id(dialog_session_active) && !id(master_mute_switch).state;
+            then:
+              - script.execute: play_dialog_remote_ack
   on_client_connected:
     - script.execute: control_leds
   on_client_disconnected:
@@ -153,6 +168,19 @@ globals:
   # assistant state machine; values one through six are documented in README.md.
   - id: nanobot_led_state
     type: int
+    restore_value: no
+    initial_value: '0'
+  # Open-dialog state is deliberately not restored across a reboot.
+  - id: dialog_session_active
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: dialog_exit_requested
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: dialog_turn_count
+    type: uint8_t
     restore_value: no
     initial_value: '0'
   # Global variable tracking if the dial was recently touched.
@@ -212,6 +240,11 @@ switch:
     turn_on_action:
       - if:
           condition:
+            lambda: return id(dialog_session_active);
+          then:
+            - script.execute: end_dialog_session
+      - if:
+          condition:
             binary_sensor.is_off: hardware_mute_switch
           then:
             - microphone.mute:
@@ -235,6 +268,19 @@ switch:
     restore_mode: RESTORE_DEFAULT_ON
   # Disable physical controls switch
   - platform: template
+    id: open_dialog_mode
+    name: Open dialog mode
+    icon: "mdi:account-voice"
+    entity_category: config
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    turn_off_action:
+      - if:
+          condition:
+            lambda: return id(dialog_session_active);
+          then:
+            - script.execute: end_dialog_session
+  - platform: template
     id: disable_buttons
     name: Disable physical controls
     icon: "mdi:button-pointer"
@@ -249,8 +295,12 @@ switch:
     internal: true
     restore_mode: ALWAYS_OFF
     on_turn_off:
-      # Disable stop wake word
-      - micro_wake_word.disable_model: stop
+      # Keep the local Stop model active while an open dialog is active.
+      - if:
+          condition:
+            lambda: return !id(dialog_session_active);
+          then:
+            - micro_wake_word.disable_model: stop
       - script.execute: disable_repeat
       # Stop any current announcement (ie: stop the timer ring mid playback)
       - if:
@@ -292,6 +342,13 @@ switch:
     internal: true
 
 binary_sensor:
+  - platform: template
+    id: dialog_session_active_sensor
+    name: Dialog session active
+    icon: "mdi:account-voice"
+    entity_category: diagnostic
+    lambda: return id(dialog_session_active);
+
   # Center Button. Used for many things (See on_multi_click)
   - platform: gpio
     id: center_button
@@ -342,7 +399,13 @@ binary_sensor:
                           condition:
                             voice_assistant.is_running:
                           then:
-                            - voice_assistant.stop:
+                            - if:
+                                condition:
+                                  lambda: return id(dialog_session_active);
+                                then:
+                                  - script.execute: end_dialog_session
+                                else:
+                                  - voice_assistant.stop:
                           else:
                             - if:
                                 condition:
@@ -528,6 +591,11 @@ binary_sensor:
     internal: true
     pin: GPIO3
     on_press:
+      - if:
+          condition:
+            lambda: return id(dialog_session_active);
+          then:
+            - script.execute: end_dialog_session
       # Play mute on sound only if software mute isn't enabled
       - if:
           condition:
@@ -734,26 +802,32 @@ light:
             bool visible = true;
             int8_t direction = 1;
             uint8_t width = 3;
+            uint8_t intensity = 255;
 
             switch (state) {
-              case 1:  // thinking: amber, clockwise
+              case 1:  // processing: amber, clockwise
                 color = Color(255, 150, 0);
                 break;
-              case 2:  // acknowledgement: blue pulse
+              case 2: {  // remote agent acknowledged: short blue pulse
                 color = Color(0, 110, 255);
                 full_ring = true;
-                visible = ((frame / 4) % 2) == 0;
+                const uint8_t phase = frame % 12;
+                intensity = 255 - phase * 18;
                 break;
+              }
               case 3:  // replying: cyan, anticlockwise
                 color = Color(0, 210, 255);
                 direction = -1;
                 break;
-              case 4:  // follow-up: violet breathing ring
+              case 4: {  // wake-free follow-up: violet breathing ring
                 color = Color(155, 80, 255);
                 full_ring = true;
-                visible = ((frame / 8) % 2) == 0;
+                const uint8_t phase = frame % 40;
+                const uint8_t triangle = phase <= 20 ? phase : 40 - phase;
+                intensity = 64 + triangle * 8;
                 break;
-              case 5:  // done: short green confirmation
+              }
+              case 5:  // session opened/closed: short green confirmation
                 color = Color(0, 255, 80);
                 full_ring = true;
                 break;
@@ -775,7 +849,7 @@ light:
             }
             if (full_ring) {
               for (uint8_t i = 0; i < 12; i++) {
-                it[i] = color;
+                it[i] = color * intensity;
               }
               return;
             }
@@ -1062,6 +1136,14 @@ power_supply:
   - id: led_power
     pin: GPIO45
 
+text_sensor:
+  - platform: template
+    id: dialog_state
+    name: Dialog state
+    icon: "mdi:state-machine"
+    entity_category: diagnostic
+    update_interval: never
+
 sensor:
   # The dial. Used to control volume and Hue of the LED ring.
   - platform: rotary_encoder
@@ -1133,6 +1215,139 @@ event:
       - easter_egg_press
 
 script:
+  # Start a bounded, wake-free follow-up session. The stock Assist pipeline,
+  # selected STT/TTS engines and local-intent routing remain unchanged.
+  - id: start_dialog_session
+    mode: single
+    then:
+      - if:
+          condition:
+            and:
+              - switch.is_on: open_dialog_mode
+              - switch.is_off: master_mute_switch
+              - lambda: return !id(dialog_session_active);
+          then:
+            - lambda: |-
+                id(dialog_session_active) = true;
+                id(dialog_exit_requested) = false;
+                id(dialog_turn_count) = 0;
+            - text_sensor.template.publish:
+                id: dialog_state
+                state: "activating"
+            - micro_wake_word.enable_model: stop
+            - script.execute:
+                id: set_nanobot_led_state
+                state: 5
+            - script.execute: dialog_session_timeout
+            - delay: 250ms
+            - voice_assistant.start_continuous:
+
+  # End the open dialog on Stop, a recognized exit phrase, mute, the center
+  # button, timeout or an error. Sessions never survive a reboot/disconnect.
+  - id: end_dialog_session
+    mode: restart
+    then:
+      - lambda: |-
+          id(dialog_session_active) = false;
+          id(dialog_exit_requested) = false;
+          id(dialog_turn_count) = 0;
+      - text_sensor.template.publish:
+          id: dialog_state
+          state: "ending"
+      - script.stop: dialog_session_timeout
+      - script.stop: dialog_end_after_response
+      - script.stop: activate_stop_word_once
+      - voice_assistant.stop:
+      - if:
+          condition:
+            media_player.is_announcing:
+              id: external_media_player
+          then:
+            - media_player.stop:
+                announcement: true
+                id: external_media_player
+      - if:
+          condition:
+            switch.is_off: timer_ringing
+          then:
+            - micro_wake_word.disable_model: stop
+      - script.execute:
+          id: set_nanobot_led_state
+          state: 5
+      - delay: 1s
+      - text_sensor.template.publish:
+          id: dialog_state
+          state: "sleeping"
+      - script.execute: clear_nanobot_led_state
+
+  - id: fail_dialog_session
+    mode: restart
+    then:
+      - lambda: |-
+          id(dialog_session_active) = false;
+          id(dialog_exit_requested) = false;
+          id(dialog_turn_count) = 0;
+      - script.stop: dialog_session_timeout
+      - script.stop: dialog_end_after_response
+      - script.stop: activate_stop_word_once
+      - voice_assistant.stop:
+      - if:
+          condition:
+            switch.is_off: timer_ringing
+          then:
+            - micro_wake_word.disable_model: stop
+      - text_sensor.template.publish:
+          id: dialog_state
+          state: "error"
+      - script.execute:
+          id: set_nanobot_led_state
+          state: 6
+
+  # Hard safety limit. It is intentionally not restored or extended by turns.
+  - id: dialog_session_timeout
+    mode: restart
+    then:
+      - delay: 2min
+      - script.execute: end_dialog_session
+
+  # Let the twentieth response finish, then close instead of starting turn 21.
+  - id: dialog_end_after_response
+    mode: restart
+    then:
+      - wait_until:
+          condition:
+            media_player.is_announcing:
+              id: external_media_player
+          timeout: 15s
+      - if:
+          condition:
+            media_player.is_announcing:
+              id: external_media_player
+          then:
+            - wait_until:
+                condition:
+                  not:
+                    media_player.is_announcing:
+                      id: external_media_player
+                timeout: 2min
+      - script.execute: end_dialog_session
+
+  # Fast local acknowledgement for the remote agent. Home Assistant must call
+  # the API action only after local intent matching has failed.
+  - id: play_dialog_remote_ack
+    mode: single
+    then:
+      - text_sensor.template.publish:
+          id: dialog_state
+          state: "remote_ack"
+      - script.execute:
+          id: set_nanobot_led_state
+          state: 2
+      - script.execute:
+          id: play_sound
+          priority: false
+          sound_file: "remote_ack_einen_moment"
+
   # Master script controlling the LEDs, based on different conditions : initialization in progress, wifi and api connected and voice assistant phase.
   # For the sake of simplicity and re-usability, the script calls child scripts defined below.
   # This script will be called every time one of these conditions is changing.
@@ -1668,7 +1883,9 @@ script:
                     id: external_media_player
             - if:
                 condition:
-                  switch.is_off: timer_ringing
+                  and:
+                    - switch.is_off: timer_ringing
+                    - lambda: return !id(dialog_session_active);
                 then:
                   - micro_wake_word.disable_model: stop
 
@@ -1775,6 +1992,8 @@ audio_file:
     file: ${easter_egg_tada_sound_file}
   - id: error_cloud_expired
     file: ${error_cloud_expired_sound_file}
+  - id: remote_ack_einen_moment
+    file: ${remote_ack_sound_file}
 
 media_source:
   - platform: audio_file
@@ -1852,10 +2071,18 @@ voice_kit:
 
 # Sendspin related components are pinned to specific commits for reproducible builds
 external_components:
+  # Vendored immutable snapshot of ESPHome PR #19408 at commit 04caa384.
+  # It separates the playback-start timeout from the playback-stall watchdog
+  # and prevents continuous mode from reopening the microphone during TTS.
+  - source:
+      type: local
+      path: custom_components
+    components:
+      - voice_assistant
   - source:
       type: git
       url: https://github.com/esphome/home-assistant-voice-pe
-      ref: dev
+      ref: d4e6fa43d6a1a7d342b7d4d403567e06516719de
     components:
       - voice_kit
     refresh: 0s
@@ -1884,47 +2111,89 @@ micro_wake_word:
       internal: true
   vad:
   on_wake_word_detected:
-    # If the wake word is detected when the device is muted (Possible with the software mute switch): Do nothing
+    # Muted devices never start or continue a dialog.
     - if:
         condition:
           switch.is_off: master_mute_switch
         then:
-          # If a timer is ringing: Stop it, do not start the voice assistant (We can stop timer from voice!)
           - if:
+              # The internal local Stop model is the deterministic sleep word.
               condition:
-                switch.is_on: timer_ringing
+                lambda: return wake_word == "Stop";
               then:
-                - switch.turn_off: timer_ringing
-              # Stop voice assistant if running
-              else:
                 - if:
                     condition:
-                      voice_assistant.is_running:
+                      switch.is_on: timer_ringing
                     then:
-                      voice_assistant.stop:
-                    # Stop any other media player announcement
+                      - switch.turn_off: timer_ringing
                     else:
                       - if:
                           condition:
-                            media_player.is_announcing:
-                              id: external_media_player
+                            lambda: return id(dialog_session_active);
                           then:
-                            - media_player.stop:
-                                announcement: true
-                                id: external_media_player
-                          # Start the voice assistant and play the wake sound, if enabled
+                            - script.execute: end_dialog_session
                           else:
                             - if:
                                 condition:
-                                  switch.is_on: wake_sound
+                                  voice_assistant.is_running:
                                 then:
-                                  - script.execute:
-                                      id: play_sound
-                                      priority: true
-                                      sound_file: "wake_word_triggered_sound"
-                                  - delay: 300ms
-                            - voice_assistant.start:
-                                wake_word: !lambda return wake_word;
+                                  - voice_assistant.stop:
+                                else:
+                                  - if:
+                                      condition:
+                                        media_player.is_announcing:
+                                          id: external_media_player
+                                      then:
+                                        - media_player.stop:
+                                            announcement: true
+                                            id: external_media_player
+              else:
+                # Barge-in is intentionally out of scope. Ignore normal wake
+                # words while an open dialog is already active.
+                - if:
+                    condition:
+                      lambda: return id(dialog_session_active);
+                    then:
+                      - logger.log: "Ignoring wake word during active dialog (barge-in disabled)"
+                    else:
+                      - if:
+                          condition:
+                            switch.is_on: timer_ringing
+                          then:
+                            - switch.turn_off: timer_ringing
+                          else:
+                            - if:
+                                condition:
+                                  voice_assistant.is_running:
+                                then:
+                                  - voice_assistant.stop:
+                                else:
+                                  - if:
+                                      condition:
+                                        media_player.is_announcing:
+                                          id: external_media_player
+                                      then:
+                                        - media_player.stop:
+                                            announcement: true
+                                            id: external_media_player
+                                      else:
+                                        - if:
+                                            condition:
+                                              switch.is_on: wake_sound
+                                            then:
+                                              - script.execute:
+                                                  id: play_sound
+                                                  priority: true
+                                                  sound_file: "wake_word_triggered_sound"
+                                              - delay: 300ms
+                                        - if:
+                                            condition:
+                                              switch.is_on: open_dialog_mode
+                                            then:
+                                              - script.execute: start_dialog_session
+                                            else:
+                                              - voice_assistant.start:
+                                                  wake_word: !lambda return wake_word;
 
 select:
   - platform: template
@@ -1999,13 +2268,25 @@ voice_assistant:
   noise_suppression_level: 0
   auto_gain: 0 dbfs
   volume_multiplier: 1
+  # The vendored component waits this long for announcement playback to begin;
+  # once playback starts, a separate short stall watchdog is used.
+  tts_playback_start_timeout: 15s
   on_client_connected:
     - lambda: id(init_in_progress) = false;
     - micro_wake_word.start:
     - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
+    - text_sensor.template.publish:
+        id: dialog_state
+        state: "sleeping"
     - script.execute: control_leds
   on_client_disconnected:
-    - voice_assistant.stop:
+    - if:
+        condition:
+          lambda: return id(dialog_session_active);
+        then:
+          - script.execute: fail_dialog_session
+        else:
+          - voice_assistant.stop:
     - lambda: id(voice_assistant_phase) = ${voice_assist_not_ready_phase_id};
     - script.execute: control_leds
   on_error:
@@ -2019,7 +2300,13 @@ voice_assistant:
             - lambda: return code != "stt-no-text-recognized";
         then:
           - lambda: id(voice_assistant_phase) = ${voice_assist_error_phase_id};
-          - script.execute: control_leds
+          - if:
+              condition:
+                lambda: return id(dialog_session_active);
+              then:
+                - script.execute: fail_dialog_session
+              else:
+                - script.execute: control_leds
     # If the error code is cloud-auth-failed, serve a local audio file guiding the user.
     - if:
         condition:
@@ -2035,15 +2322,89 @@ voice_assistant:
         id: media_mixing_input
         decibel_reduction: 20  # Number of dB quieter; higher implies more quiet, 0 implies full volume
         duration: 0.0s         # The duration of the transition (default is no transition)
+  on_idle:
+    - if:
+        condition:
+          lambda: return id(dialog_session_active);
+        then:
+          - text_sensor.template.publish:
+              id: dialog_state
+              state: "follow_up"
+          - script.execute:
+              id: set_nanobot_led_state
+              state: 4
   on_listening:
     - lambda: id(voice_assistant_phase) = ${voice_assist_waiting_for_command_phase_id};
-    - script.execute: control_leds
+    - if:
+        condition:
+          lambda: return id(dialog_session_active);
+        then:
+          - text_sensor.template.publish:
+              id: dialog_state
+              state: "waiting"
+          - script.execute:
+              id: set_nanobot_led_state
+              state: 4
+        else:
+          - script.execute: control_leds
   on_stt_vad_start:
     - lambda: id(voice_assistant_phase) = ${voice_assist_listening_for_command_phase_id};
-    - script.execute: control_leds
+    - if:
+        condition:
+          lambda: return id(dialog_session_active);
+        then:
+          - text_sensor.template.publish:
+              id: dialog_state
+              state: "listening"
+          - script.execute: clear_nanobot_led_state
+        else:
+          - script.execute: control_leds
   on_stt_vad_end:
     - lambda: id(voice_assistant_phase) = ${voice_assist_thinking_phase_id};
-    - script.execute: control_leds
+    - if:
+        condition:
+          lambda: return id(dialog_session_active);
+        then:
+          - lambda: id(dialog_turn_count)++;
+          - text_sensor.template.publish:
+              id: dialog_state
+              state: "processing"
+          - script.execute:
+              id: set_nanobot_led_state
+              state: 1
+        else:
+          - script.execute: control_leds
+  on_stt_end:
+    - lambda: |-
+        if (!id(dialog_session_active)) {
+          id(dialog_exit_requested) = false;
+          return;
+        }
+        std::string normalized;
+        bool previous_space = true;
+        for (const unsigned char raw : x) {
+          const char c = static_cast<char>(raw);
+          if (c == '.' || c == ',' || c == '!' || c == '?' || c == ';' || c == ':') {
+            continue;
+          }
+          if (c == ' ' || c == '\t' || c == '\n') {
+            if (!previous_space) normalized.push_back(' ');
+            previous_space = true;
+            continue;
+          }
+          normalized.push_back(static_cast<char>(std::tolower(raw)));
+          previous_space = false;
+        }
+        if (!normalized.empty() && normalized.back() == ' ') normalized.pop_back();
+        id(dialog_exit_requested) =
+            normalized == "tschüss" || normalized == "tschüs" ||
+            normalized == "bye" || normalized == "goodbye" ||
+            normalized == "auf wiedersehen" || normalized == "dialog beenden";
+    - if:
+        condition:
+          lambda: return id(dialog_exit_requested);
+        then:
+          - script.execute: end_dialog_session
   on_intent_progress:
     - if:
         condition:
@@ -2051,38 +2412,69 @@ voice_assistant:
           lambda: 'return !x.empty();'
         then:
           - lambda: id(voice_assistant_phase) = ${voice_assist_replying_phase_id};
-          - script.execute: control_leds
+          - if:
+              condition:
+                lambda: return id(dialog_session_active);
+              then:
+                - text_sensor.template.publish:
+                    id: dialog_state
+                    state: "replying"
+                - script.execute:
+                    id: set_nanobot_led_state
+                    state: 3
+              else:
+                - script.execute: control_leds
           # Start a script that would potentially enable the stop word if the response is longer than a second
           - script.execute: activate_stop_word_once
   on_tts_start:
     - if:
         condition:
-          # The intent_progress trigger didn't start the TTS Reponse
+          # The intent_progress trigger didn't start the TTS response
           lambda: 'return id(voice_assistant_phase) != ${voice_assist_replying_phase_id};'
         then:
           - lambda: id(voice_assistant_phase) = ${voice_assist_replying_phase_id};
-          - script.execute: control_leds
+          - if:
+              condition:
+                lambda: return id(dialog_session_active);
+              then:
+                - text_sensor.template.publish:
+                    id: dialog_state
+                    state: "replying"
+                - script.execute:
+                    id: set_nanobot_led_state
+                    state: 3
+              else:
+                - script.execute: control_leds
           # Start a script that would potentially enable the stop word if the response is longer than a second
           - script.execute: activate_stop_word_once
-  # When the voice assistant ends ...
-  on_end:
-    - wait_until:
-        not:
-          voice_assistant.is_running:
-    # Stop ducking audio.
-    - mixer_speaker.apply_ducking:
-        id: media_mixing_input
-        decibel_reduction: 0
-        duration: 1.0s
-    # If the end happened because of an error, let the error phase on for a second
     - if:
         condition:
-          lambda: return id(voice_assistant_phase) == ${voice_assist_error_phase_id};
+          and:
+            - lambda: return id(dialog_session_active);
+            - lambda: return id(dialog_turn_count) >= 20;
         then:
-          - delay: 1s
-    # Reset the voice assistant phase id and reset the LED animations.
-    - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
-    - script.execute: control_leds
+          - script.execute: dialog_end_after_response
+  # In open-dialog mode ducking and LEDs stay active between runs. In normal
+  # one-shot mode preserve the stock teardown behavior.
+  on_end:
+    - if:
+        condition:
+          lambda: return !id(dialog_session_active);
+        then:
+          - wait_until:
+              not:
+                voice_assistant.is_running:
+          - mixer_speaker.apply_ducking:
+              id: media_mixing_input
+              decibel_reduction: 0
+              duration: 1.0s
+          - if:
+              condition:
+                lambda: return id(voice_assistant_phase) == ${voice_assist_error_phase_id};
+              then:
+                - delay: 1s
+          - lambda: id(voice_assistant_phase) = ${voice_assist_idle_phase_id};
+          - script.execute: control_leds
   on_timer_finished:
     - switch.turn_on: timer_ringing
   on_timer_started:
