@@ -49,7 +49,7 @@ besteht.
 | Aktivierung | `activating` | kurzer grüner Ring | Dialogsession wurde geöffnet |
 | Warten | `waiting` / `follow_up` | violett atmender Ring | Wake-freier Folgeturn ist bereit |
 | Zuhören | `listening` | native schnelle Listening-Animation | Sprache wurde erkannt |
-| Verarbeitung | `processing` | amberfarbener Spinner | STT, lokales Routing oder Agent laufen |
+| Verarbeitung | `processing` | amberfarbener Fake-Fortschrittsring (füllt sich über 45 s, danach von vorn) | STT, lokales Routing oder Agent laufen |
 | Remote-Bestätigung | `remote_ack` | kurzer blauer Puls | Remote-Agent hat übernommen |
 | Antwort | `replying` | cyanfarbener Spinner gegen den Uhrzeigersinn | TTS-Antwort wird vorbereitet oder gesprochen |
 | Beenden | `ending` | kurzer grüner Ring | Session wird geschlossen |
