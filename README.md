@@ -18,7 +18,7 @@ Laufzeit oder zwanzig Turns beenden sie.
 
 Die LED-Anzeige macht jede Phase sichtbar: Grün öffnet oder beendet die Session,
 Violett wartet auf einen Folgeturn, die native blaue Animation hört zu, Amber
-verarbeitet, ein kurzer blauer Puls bestätigt den Remote-Agenten, Cyan spricht
+verarbeitet (Fake-Fortschrittsring: füllt sich über 45 s, danach von vorn), ein kurzer blauer Puls bestätigt den Remote-Agenten, Cyan spricht
 und Rot signalisiert einen Fehler. Der Diagnosesensor `Dialog state` zeigt den
 Zustand zusätzlich in Home Assistant.
 
@@ -39,8 +39,8 @@ Selecting a state temporarily overrides the stock Assist animation:
 | Option | Visual feedback | Automatic reset |
 |---|---|---|
 | `off` | Return control to the stock firmware | immediate |
-| `thinking` | amber clockwise spinner | 90 seconds |
-| `ack` | blue pulse | 1.5 seconds |
+| `thinking` | amber fake progress ring: fills over 45 s, restarts when full | 90 seconds |
+| `ack` | blue pulse, then back to the progress ring while still thinking | 1.5 seconds |
 | `replying` | cyan anticlockwise spinner | 90 seconds |
 | `follow_up` | violet breathing ring | 90 seconds |
 | `done` | green confirmation | 1 second |

@@ -144,6 +144,11 @@ psram:
   ignore_not_found: false  # The VPE has PSRAM, so this is safe. Allows configuring WiFi driver to use more resources (done automatically by the speaker media player)
 
 globals:
+  # Start timestamp (millis) of the fake progress ring shown while waiting for the answer.
+  - id: thinking_progress_start
+    type: uint32_t
+    restore_value: no
+    initial_value: '0'
   # Global index for our LEDs. So that switching between different animation does not lead to unwanted effects.
   - id: global_led_animation_index
     type: int
@@ -792,6 +797,29 @@ light:
               }
             }
       - addressable_lambda:
+          name: "Thinking Progress"
+          update_interval: 50ms
+          lambda: |-
+            // Fake progress: the ring fills over 45 s and restarts when full.
+            static const uint32_t period_ms = 45000;
+            if (initial_run && id(thinking_progress_start) == 0) {
+              id(thinking_progress_start) = millis();
+            }
+            const uint32_t elapsed = (millis() - id(thinking_progress_start)) % period_ms;
+            const float position = elapsed * 12.0f / period_ms;
+            const uint8_t full = static_cast<uint8_t>(position);
+            const uint8_t partial = static_cast<uint8_t>((position - full) * 255);
+            const Color color(255, 150, 0);
+            for (uint8_t i = 0; i < 12; i++) {
+              if (i < full) {
+                it[i] = color;
+              } else if (i == full) {
+                it[i] = color * partial;
+              } else {
+                it[i] = Color::BLACK;
+              }
+            }
+      - addressable_lambda:
           name: "Nanobot Status"
           update_interval: 50ms
           lambda: |-
@@ -1408,7 +1436,8 @@ script:
       - light.turn_on:
           brightness: 55%
           id: voice_assistant_leds
-          effect: "Nanobot Status"
+          effect: !lambda |-
+            return id(nanobot_led_state) == 1 ? "Thinking Progress" : "Nanobot Status";
 
   # Set a Nanobot LED override and arm a state-specific fail-safe timeout.
   - id: set_nanobot_led_state
@@ -1458,7 +1487,15 @@ script:
     mode: restart
     then:
       - delay: 1500ms
-      - script.execute: clear_nanobot_led_state
+      - if:
+          condition:
+            lambda: return id(voice_assistant_phase) == ${voice_assist_thinking_phase_id};
+          then:
+            - script.execute:
+                id: set_nanobot_led_state
+                state: 1
+          else:
+            - script.execute: clear_nanobot_led_state
   - id: nanobot_led_done_timeout
     mode: restart
     then:
@@ -1571,7 +1608,7 @@ script:
       - light.turn_on:
           brightness: !lambda return max( id(led_ring).current_values.get_brightness() , 0.2f );
           id: voice_assistant_leds
-          effect: "Thinking"
+          effect: "Thinking Progress"
 
   # Script executed when the voice assistant is thinking to a command
   # Fast anticlockwise spin of the LED ring.
@@ -2360,7 +2397,9 @@ voice_assistant:
         else:
           - script.execute: control_leds
   on_stt_vad_end:
-    - lambda: id(voice_assistant_phase) = ${voice_assist_thinking_phase_id};
+    - lambda: |-
+        id(voice_assistant_phase) = ${voice_assist_thinking_phase_id};
+        id(thinking_progress_start) = millis();
     - if:
         condition:
           lambda: return id(dialog_session_active);
