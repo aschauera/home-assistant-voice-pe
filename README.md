@@ -13,14 +13,18 @@ The upstream project remains available at
 Die Custom Firmware unterstützt einen begrenzten halbduplexen Dialog über die
 bestehende Home-Assistant-Assist-Pipeline. Ein Wake Word öffnet die Session;
 nach jeder Antwort wartet das Gerät ohne neues Wake Word auf den nächsten Turn.
-`Stop`, definierte Exit-Phrasen, Mute, die mittlere Taste, Fehler, zwei Minuten
-Laufzeit oder zwanzig Turns beenden sie.
+`Stop`, definierte Exit-Phrasen, Mute, die mittlere Taste, Fehler, zehn Minuten
+Gesamtlaufzeit oder zwanzig Turns beenden sie. Zusätzlich endet jede Wartephase,
+wenn innerhalb von 20 Sekunden kein Sprachbeginn erkannt wird; für jeden
+Folgeturn wird dieser Timeout neu gestartet.
 
-Die LED-Anzeige macht jede Phase sichtbar: Grün öffnet oder beendet die Session,
-Violett wartet auf einen Folgeturn, die native blaue Animation hört zu, Amber
-verarbeitet (Fake-Fortschrittsring: füllt sich über 45 s, danach von vorn), ein kurzer blauer Puls bestätigt den Remote-Agenten, Cyan spricht
-und Rot signalisiert einen Fehler. Der Diagnosesensor `Dialog state` zeigt den
-Zustand zusätzlich in Home Assistant.
+Die LED-Anzeige ist bewusst einfach: Ein voller grüner Ring bestätigt die
+Aktivierung. Während des Wartens und der Sprachaufnahme atmet der Ring langsam
+violett. Bei der Verarbeitung pulsiert er langsam amberfarben, während der
+TTS-Wiedergabe schneller amberfarben und danach wieder violett. Die lokale
+Remote-Bestätigung ändert die LED nicht. Ein normaler Session-Abschluss blinkt
+kurz orange und geht dann aus; Fehler bleiben rot. Der Diagnosesensor
+`Dialog state` zeigt den Zustand zusätzlich in Home Assistant.
 
 Eine eingebettete lokale Ansage „Einen Moment.“ kann über die ESPHome-Aktion
 `dialog_remote_ack` ausgelöst werden. Die Conversation-Agent-Integration muss
@@ -39,11 +43,11 @@ Selecting a state temporarily overrides the stock Assist animation:
 | Option | Visual feedback | Automatic reset |
 |---|---|---|
 | `off` | Return control to the stock firmware | immediate |
-| `thinking` | amber fake progress ring: fills over 45 s, restarts when full | 90 seconds |
-| `ack` | blue pulse, then back to the progress ring while still thinking | 1.5 seconds |
-| `replying` | cyan anticlockwise spinner | 90 seconds |
-| `follow_up` | violet breathing ring | 90 seconds |
-| `done` | green confirmation | 1 second |
+| `thinking` | langsam amberfarben pulsierender Ring | 90 Sekunden |
+| `ack` | LED bleibt unverändert (Kompatibilitätsoption) | bestehender Timeout |
+| `replying` | schneller amberfarben pulsierender Ring | 90 Sekunden |
+| `follow_up` | langsam violett atmender Ring | 90 Sekunden |
+| `done` | grüner Bestätigungsring | 1 Sekunde |
 | `error` | red flash | 3 seconds |
 
 Startup failure, provisioning, loss of the Home Assistant connection, hardware
@@ -62,6 +66,10 @@ data:
 ```
 
 The exact entity ID is assigned by Home Assistant and may differ.
+
+Für eine stabilere Audioübertragung ist der WLAN-Energiesparmodus deaktiviert;
+der Diagnosesensor `Wi-Fi signal` veröffentlicht den RSSI. Der I²S-Ausgabepuffer
+beträgt 300 ms.
 
 ## Building and installing
 

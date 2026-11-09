@@ -28,8 +28,14 @@ Eine Session endet bei einem der folgenden Ereignisse:
 - Hardware- oder Software-Mute,
 - Verlust der Home-Assistant-Verbindung,
 - Voice-Assistant-Fehler,
-- zwei Minuten Gesamtlaufzeit,
+- 20 Sekunden ohne erkannten Sprachbeginn in einer Wartephase,
+- zehn Minuten Gesamtlaufzeit,
 - nach der zwanzigsten Antwort.
+
+Der 20-Sekunden-Timeout wird bei Beginn jeder Wartephase neu gestartet und bei
+VAD-Sprachbeginn sofort gestoppt. Auch Verarbeitung, Antwort, Session-Ende und
+Fehler halten ihn an, damit kein alter Timer in einen späteren Zustand hinein
+ablaufen kann.
 
 Der Sessionstatus wird nie über einen Neustart hinweg wiederhergestellt. Der
 lokale `Stop`-Detektor ist der deterministische Exit-Pfad. Die über STT
@@ -45,14 +51,14 @@ besteht.
 
 | Zustand | `Dialog state` | LED-Anzeige | Bedeutung |
 |---|---|---|---|
-| Schlafmodus | `sleeping` | normale Idle-Anzeige | Neues Wake Word erforderlich |
-| Aktivierung | `activating` | kurzer grüner Ring | Dialogsession wurde geöffnet |
-| Warten | `waiting` / `follow_up` | violett atmender Ring | Wake-freier Folgeturn ist bereit |
-| Zuhören | `listening` | native schnelle Listening-Animation | Sprache wurde erkannt |
-| Verarbeitung | `processing` | amberfarbener Fake-Fortschrittsring (füllt sich über 45 s, danach von vorn) | STT, lokales Routing oder Agent laufen |
-| Remote-Bestätigung | `remote_ack` | kurzer blauer Puls | Remote-Agent hat übernommen |
-| Antwort | `replying` | cyanfarbener Spinner gegen den Uhrzeigersinn | TTS-Antwort wird vorbereitet oder gesprochen |
-| Beenden | `ending` | kurzer grüner Ring | Session wird geschlossen |
+| Schlafmodus | `sleeping` | Ring aus / normale Idle-Anzeige | Neues Wake Word erforderlich |
+| Aktivierung | `activating` | voller grüner Ring | Dialogsession wurde geöffnet |
+| Warten | `waiting` / `follow_up` | langsam violett atmender Ring | Wake-freier Folgeturn ist bereit |
+| Zuhören | `listening` | langsam violett atmender Ring | Sprache wird aufgenommen |
+| Verarbeitung | `processing` | langsam amberfarben pulsierender Ring | STT, lokales Routing oder Agent laufen |
+| Remote-Bestätigung | `remote_ack` | unverändert amberfarben | Lokale Ansage, ohne LED-Zustandswechsel |
+| Antwort | `replying` | schneller amberfarben pulsierender Ring | TTS-Antwort wird gesprochen |
+| Beenden | `ending` | ein kurzer orangefarbener Blink | Session wird geschlossen |
 | Fehler | `error` | rotes Blinken | Session wurde sicher abgebrochen |
 
 Folgende Zustände behalten höhere Priorität als Dialoganzeigen:
@@ -84,7 +90,8 @@ action: esphome.home_assistant_voice_0a6c07_dialog_remote_ack
 
 Die Aktion spielt nur dann etwas ab, wenn eine Dialogsession aktiv und das
 Gerät nicht stumm ist. Sie ist Fire-and-forget: Ein Fehler bei der Bestätigung
-darf die eigentliche Remote-Anfrage nie blockieren.
+darf die eigentliche Remote-Anfrage nie blockieren. Die LED bleibt dabei im
+langsamen amberfarbenen Verarbeitungszustand.
 
 ### Routing-Vertrag
 
@@ -140,6 +147,9 @@ Die Herkunft und der genaue Commit sind in
   Firmware bereit.
 - Die lokale Remote-Bestätigung funktioniert erst, wenn die jeweilige
   Conversation-Agent-Integration den API-Hook aufruft.
+- Der deaktivierte WLAN-Energiesparmodus erhöht den Stromverbrauch geringfügig.
+  Der RSSI ist als Diagnosesensor `Wi-Fi signal` sichtbar; der I²S-Ausgabepuffer
+  ist für robustere Wiedergabe auf 300 ms erhöht.
 - Eine Voice PE identifiziert nicht die sprechende Person. Alle Personen in
   Hörweite handeln mit den Rechten des in Home Assistant konfigurierten
   Voice-Benutzers.
