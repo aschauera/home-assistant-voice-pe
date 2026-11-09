@@ -86,6 +86,7 @@ esp32:
 wifi:
   id: wifi_id
   fast_connect: ${hidden_ssid}
+  power_save_mode: none
   on_connect:
     - lambda: id(improv_ble_in_progress) = false;
     - script.execute: control_leds
@@ -144,11 +145,6 @@ psram:
   ignore_not_found: false  # The VPE has PSRAM, so this is safe. Allows configuring WiFi driver to use more resources (done automatically by the speaker media player)
 
 globals:
-  # Start timestamp (millis) of the fake progress ring shown while waiting for the answer.
-  - id: thinking_progress_start
-    type: uint32_t
-    restore_value: no
-    initial_value: '0'
   # Global index for our LEDs. So that switching between different animation does not lead to unwanted effects.
   - id: global_led_animation_index
     type: int
@@ -797,29 +793,6 @@ light:
               }
             }
       - addressable_lambda:
-          name: "Thinking Progress"
-          update_interval: 50ms
-          lambda: |-
-            // Fake progress: the ring fills over 45 s and restarts when full.
-            static const uint32_t period_ms = 45000;
-            if (initial_run && id(thinking_progress_start) == 0) {
-              id(thinking_progress_start) = millis();
-            }
-            const uint32_t elapsed = (millis() - id(thinking_progress_start)) % period_ms;
-            const float position = elapsed * 12.0f / period_ms;
-            const uint8_t full = static_cast<uint8_t>(position);
-            const uint8_t partial = static_cast<uint8_t>((position - full) * 255);
-            const Color color(255, 150, 0);
-            for (uint8_t i = 0; i < 12; i++) {
-              if (i < full) {
-                it[i] = color;
-              } else if (i == full) {
-                it[i] = color * partial;
-              } else {
-                it[i] = Color::BLACK;
-              }
-            }
-      - addressable_lambda:
           name: "Nanobot Status"
           update_interval: 50ms
           lambda: |-
@@ -833,29 +806,36 @@ light:
             uint8_t intensity = 255;
 
             switch (state) {
-              case 1:  // processing: amber, clockwise
+              case 1: {  // processing: slowly pulsing amber ring
                 color = Color(255, 150, 0);
-                break;
-              case 2: {  // remote agent acknowledged: short blue pulse
-                color = Color(0, 110, 255);
                 full_ring = true;
-                const uint8_t phase = frame % 12;
-                intensity = 255 - phase * 18;
+                const uint8_t phase = frame % 48;
+                const uint8_t triangle = phase <= 24 ? phase : 48 - phase;
+                intensity = 55 + triangle * 8;
                 break;
               }
-              case 3:  // replying: cyan, anticlockwise
-                color = Color(0, 210, 255);
-                direction = -1;
+              case 2:  // legacy ACK state: keep processing feedback
+                color = Color(255, 150, 0);
+                full_ring = true;
+                intensity = 150;
                 break;
-              case 4: {  // wake-free follow-up: violet breathing ring
+              case 3: {  // spoken TTS: faster pulsing amber ring
+                color = Color(255, 150, 0);
+                full_ring = true;
+                const uint8_t phase = frame % 20;
+                const uint8_t triangle = phase <= 10 ? phase : 20 - phase;
+                intensity = 55 + triangle * 20;
+                break;
+              }
+              case 4: {  // waiting or capturing speech: slow violet breathing
                 color = Color(155, 80, 255);
                 full_ring = true;
-                const uint8_t phase = frame % 40;
-                const uint8_t triangle = phase <= 20 ? phase : 40 - phase;
-                intensity = 64 + triangle * 8;
+                const uint8_t phase = frame % 48;
+                const uint8_t triangle = phase <= 24 ? phase : 48 - phase;
+                intensity = 55 + triangle * 8;
                 break;
               }
-              case 5:  // session opened/closed: short green confirmation
+              case 5:  // session activation: green full ring
                 color = Color(0, 255, 80);
                 full_ring = true;
                 break;
@@ -863,6 +843,10 @@ light:
                 color = Color(255, 0, 0);
                 full_ring = true;
                 visible = ((frame / 3) % 2) == 0;
+                break;
+              case 7:  // normal session end: short orange blink
+                color = Color(255, 90, 0);
+                full_ring = true;
                 break;
               default:
                 visible = false;
@@ -1173,6 +1157,12 @@ text_sensor:
     update_interval: never
 
 sensor:
+  - platform: wifi_signal
+    name: Wi-Fi signal
+    id: wifi_signal_db
+    entity_category: diagnostic
+    update_interval: 60s
+
   # The dial. Used to control volume and Hue of the LED ring.
   - platform: rotary_encoder
     id: dial
@@ -1283,6 +1273,7 @@ script:
           id: dialog_state
           state: "ending"
       - script.stop: dialog_session_timeout
+      - script.stop: dialog_no_speech_timeout
       - script.stop: dialog_end_after_response
       - script.stop: activate_stop_word_once
       - voice_assistant.stop:
@@ -1301,8 +1292,8 @@ script:
             - micro_wake_word.disable_model: stop
       - script.execute:
           id: set_nanobot_led_state
-          state: 5
-      - delay: 1s
+          state: 7
+      - delay: 300ms
       - text_sensor.template.publish:
           id: dialog_state
           state: "sleeping"
@@ -1316,6 +1307,7 @@ script:
           id(dialog_exit_requested) = false;
           id(dialog_turn_count) = 0;
       - script.stop: dialog_session_timeout
+      - script.stop: dialog_no_speech_timeout
       - script.stop: dialog_end_after_response
       - script.stop: activate_stop_word_once
       - voice_assistant.stop:
@@ -1335,8 +1327,20 @@ script:
   - id: dialog_session_timeout
     mode: restart
     then:
-      - delay: 2min
+      - delay: 10min
       - script.execute: end_dialog_session
+
+  # Each waiting phase gets a fresh limit for speech to begin. VAD start and all
+  # later pipeline phases stop this timer immediately.
+  - id: dialog_no_speech_timeout
+    mode: restart
+    then:
+      - delay: 20s
+      - if:
+          condition:
+            lambda: return id(dialog_session_active);
+          then:
+            - script.execute: end_dialog_session
 
   # Let the twentieth response finish, then close instead of starting turn 21.
   - id: dialog_end_after_response
@@ -1368,9 +1372,8 @@ script:
       - text_sensor.template.publish:
           id: dialog_state
           state: "remote_ack"
-      - script.execute:
-          id: set_nanobot_led_state
-          state: 2
+      # Keep the processing LED unchanged; only the local sound acknowledges
+      # that the remote agent has taken over.
       - script.execute:
           id: play_sound
           priority: false
@@ -1436,8 +1439,7 @@ script:
       - light.turn_on:
           brightness: 55%
           id: voice_assistant_leds
-          effect: !lambda |-
-            return id(nanobot_led_state) == 1 ? "Thinking Progress" : "Nanobot Status";
+          effect: "Nanobot Status"
 
   # Set a Nanobot LED override and arm a state-specific fail-safe timeout.
   - id: set_nanobot_led_state
@@ -1608,7 +1610,7 @@ script:
       - light.turn_on:
           brightness: !lambda return max( id(led_ring).current_values.get_brightness() , 0.2f );
           id: voice_assistant_leds
-          effect: "Thinking Progress"
+          effect: "Thinking"
 
   # Script executed when the voice assistant is thinking to a command
   # Fast anticlockwise spin of the LED ring.
@@ -1965,7 +1967,7 @@ speaker:
     dac_type: external
     channel: stereo
     timeout: never
-    buffer_duration: 100ms
+    buffer_duration: 300ms
     audio_dac: aic3204_dac
 
   # Virtual speakers to combine the announcement and media streams together into one output
@@ -2254,7 +2256,7 @@ select:
           id: set_nanobot_led_state
           state: !lambda |-
             if (x == "thinking") return 1;
-            if (x == "ack") return 2;
+            if (x == "ack") return id(nanobot_led_state);
             if (x == "replying") return 3;
             if (x == "follow_up") return 4;
             if (x == "done") return 5;
@@ -2327,6 +2329,7 @@ voice_assistant:
     - lambda: id(voice_assistant_phase) = ${voice_assist_not_ready_phase_id};
     - script.execute: control_leds
   on_error:
+    - script.stop: dialog_no_speech_timeout
     # Only set the error phase if the error code is different than duplicate_wake_up_detected or stt-no-text-recognized
     # These two are ignored for a better user experience
     - if:
@@ -2370,6 +2373,7 @@ voice_assistant:
           - script.execute:
               id: set_nanobot_led_state
               state: 4
+          - script.execute: dialog_no_speech_timeout
   on_listening:
     - lambda: id(voice_assistant_phase) = ${voice_assist_waiting_for_command_phase_id};
     - if:
@@ -2382,9 +2386,11 @@ voice_assistant:
           - script.execute:
               id: set_nanobot_led_state
               state: 4
+          - script.execute: dialog_no_speech_timeout
         else:
           - script.execute: control_leds
   on_stt_vad_start:
+    - script.stop: dialog_no_speech_timeout
     - lambda: id(voice_assistant_phase) = ${voice_assist_listening_for_command_phase_id};
     - if:
         condition:
@@ -2393,13 +2399,14 @@ voice_assistant:
           - text_sensor.template.publish:
               id: dialog_state
               state: "listening"
-          - script.execute: clear_nanobot_led_state
+          - script.execute:
+              id: set_nanobot_led_state
+              state: 4
         else:
           - script.execute: control_leds
   on_stt_vad_end:
-    - lambda: |-
-        id(voice_assistant_phase) = ${voice_assist_thinking_phase_id};
-        id(thinking_progress_start) = millis();
+    - script.stop: dialog_no_speech_timeout
+    - lambda: id(voice_assistant_phase) = ${voice_assist_thinking_phase_id};
     - if:
         condition:
           lambda: return id(dialog_session_active);
@@ -2445,6 +2452,7 @@ voice_assistant:
         then:
           - script.execute: end_dialog_session
   on_intent_progress:
+    - script.stop: dialog_no_speech_timeout
     - if:
         condition:
           # A nonempty x variable means a streaming TTS url was sent to the media player
@@ -2466,6 +2474,7 @@ voice_assistant:
           # Start a script that would potentially enable the stop word if the response is longer than a second
           - script.execute: activate_stop_word_once
   on_tts_start:
+    - script.stop: dialog_no_speech_timeout
     - if:
         condition:
           # The intent_progress trigger didn't start the TTS response
@@ -2496,6 +2505,7 @@ voice_assistant:
   # In open-dialog mode ducking and LEDs stay active between runs. In normal
   # one-shot mode preserve the stock teardown behavior.
   on_end:
+    - script.stop: dialog_no_speech_timeout
     - if:
         condition:
           lambda: return !id(dialog_session_active);
