@@ -19,7 +19,9 @@ class CustomFirmwareContractTest(unittest.TestCase):
         for expected in (
             "id: dialog_session_active",
             "id: dialog_session_timeout",
-            "delay: 2min",
+            "delay: 10min",
+            "id: dialog_no_speech_timeout",
+            "delay: 20s",
             "id(dialog_turn_count) >= 20",
             "voice_assistant.start_continuous:",
             "Ignoring wake word during active dialog (barge-in disabled)",
@@ -41,13 +43,63 @@ class CustomFirmwareContractTest(unittest.TestCase):
         ):
             self.assertIn(state, DOC)
 
-    def test_remote_ack_is_local_and_guarded(self) -> None:
+    def test_no_speech_timeout_lifecycle(self) -> None:
+        self.assertGreaterEqual(
+            CONFIG.count("script.execute: dialog_no_speech_timeout"), 2
+        )
+        for event in (
+            "on_stt_vad_start:",
+            "on_stt_vad_end:",
+            "on_intent_progress:",
+            "on_tts_start:",
+            "on_end:",
+            "on_error:",
+        ):
+            block = CONFIG.split(event, maxsplit=1)[1].split("\n  on_", maxsplit=1)[0]
+            self.assertIn("script.stop: dialog_no_speech_timeout", block, event)
+
+    def test_simplified_dialog_led_contract(self) -> None:
+        for expected in (
+            "processing: slowly pulsing amber ring",
+            "spoken TTS: faster pulsing amber ring",
+            "waiting or capturing speech: slow violet breathing",
+            "session activation: green full ring",
+            "normal session end: short orange blink",
+            "error: red flash",
+            "state: 7",
+            "delay: 300ms",
+        ):
+            self.assertIn(expected, CONFIG)
+        self.assertNotIn('effect: "Thinking Progress"', CONFIG)
+
+    def test_remote_ack_is_local_guarded_and_led_neutral(self) -> None:
         sound = ROOT / "sounds/remote_ack_einen_moment.mp3"
         self.assertTrue(sound.is_file())
         self.assertGreater(sound.stat().st_size, 1_000)
         self.assertIn("action: dialog_remote_ack", CONFIG)
         self.assertIn("id(dialog_session_active)", CONFIG)
         self.assertIn('sound_file: "remote_ack_einen_moment"', CONFIG)
+        ack_script = CONFIG.split("  - id: play_dialog_remote_ack", maxsplit=1)[1]
+        ack_script = ack_script.split("\n  - id:", maxsplit=1)[0]
+        self.assertNotIn("set_nanobot_led_state", ack_script)
+
+    def test_audio_and_wifi_diagnostics(self) -> None:
+        self.assertIn("power_save_mode: none", CONFIG)
+        self.assertIn("platform: wifi_signal", CONFIG)
+        self.assertIn("entity_category: diagnostic", CONFIG)
+        self.assertIn("buffer_duration: 300ms", CONFIG)
+
+    def test_bridge_facing_entities_remain_compatible(self) -> None:
+        for expected in (
+            "action: dialog_remote_ack",
+            "name: Dialog state",
+            "name: Dialog session active",
+            'name: "Nanobot LED state"',
+            '- "ack"',
+            '- "replying"',
+            '- "follow_up"',
+        ):
+            self.assertIn(expected, CONFIG)
 
     def test_vendored_cpp_matches_reviewed_upstream_commit(self) -> None:
         expected = {
