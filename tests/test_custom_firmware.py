@@ -25,6 +25,7 @@ class CustomFirmwareContractTest(unittest.TestCase):
             "id(dialog_turn_count) >= 20",
             "voice_assistant.start_continuous:",
             "Ignoring wake word during active dialog (barge-in disabled)",
+            'normalized == "stop" || normalized == "stopp"',
         ):
             self.assertIn(expected, CONFIG)
 

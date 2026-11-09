@@ -22,7 +22,7 @@ startet. Der Schalter ist in der Custom Firmware standardmäßig aktiviert.
 Eine Session endet bei einem der folgenden Ereignisse:
 
 - lokales Sleep Word `Stop`,
-- erkannter STT-Text `Tschüss`, `Tschüs`, `Bye`, `Goodbye`,
+- erkannter STT-Text `Stop`, `Stopp`, `Tschüss`, `Tschüs`, `Bye`, `Goodbye`,
   `Auf Wiedersehen` oder `Dialog beenden`,
 - Druck auf die mittlere Taste,
 - Hardware- oder Software-Mute,

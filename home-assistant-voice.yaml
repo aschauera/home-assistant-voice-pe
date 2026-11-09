@@ -2443,6 +2443,7 @@ voice_assistant:
         }
         if (!normalized.empty() && normalized.back() == ' ') normalized.pop_back();
         id(dialog_exit_requested) =
+            normalized == "stop" || normalized == "stopp" ||
             normalized == "tschüss" || normalized == "tschüs" ||
             normalized == "bye" || normalized == "goodbye" ||
             normalized == "auf wiedersehen" || normalized == "dialog beenden";
