@@ -209,6 +209,25 @@ Minuten warten und dann prüfen:
    - lokaler HA-Befehl im Folgeturn;
    - `Stop` beendet die Session.
 
+### Empfohlene Testsätze
+
+Die folgenden Sätze bilden zusammen einen kurzen, reproduzierbaren Hardwaretest:
+
+1. **Mit Wake Word:** „Erkläre mir bitte in zwei kurzen Sätzen, warum der Himmel
+   blau ist.“
+   Erwartung: Die Remote-Anfrage löst genau einmal „Einen Moment.“ aus; danach
+   wird die vollständige Antwort ohne Abbruch wiedergegeben.
+2. **Ohne neues Wake Word:** „Und warum ist der Sonnenuntergang rot?“
+   Erwartung: Der Folgeturn startet direkt, übernimmt den Gesprächskontext und
+   gibt erneut eine vollständige Antwort aus.
+3. **Ohne neues Wake Word:** „Schalte das Licht in der Küche ein.“
+   Erwartung: Home Assistant führt den lokalen Intent aus; die Remote-
+   Bestätigung „Einen Moment.“ darf dabei nicht abgespielt werden.
+
+Anschließend „Stop“ oder „Stopp“ sagen. Die Session muss enden, der LED-Ring in
+seinen Idle-Zustand wechseln und ein weiterer Satz darf ohne neues Wake Word
+keinen Turn mehr starten. Das Küchenlicht nach dem Test wieder ausschalten.
+
 Wichtig: Die ESPHome-Weboberfläche behält ihre bisherige YAML. Ein späteres
 `Install -> Wirelessly` aus dieser Oberfläche kompiliert genau diese dort
 hinterlegte YAML und kann die Open-Mic-Firmware wieder überschreiben. Entweder
