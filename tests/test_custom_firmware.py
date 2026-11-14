@@ -7,6 +7,7 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+import wave
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = (ROOT / "home-assistant-voice.yaml").read_text(encoding="utf-8")
@@ -65,6 +66,7 @@ class CustomFirmwareContractTest(unittest.TestCase):
             self.assertIn("home-assistant-voice.factory.yaml", members)
             self.assertIn("custom_components/voice_assistant/voice_assistant.cpp", members)
             self.assertIn("sounds/remote_ack_einen_moment.mp3", members)
+            self.assertIn("sounds/dialog_idle_timeout.wav", members)
 
     def test_dialog_safety_contract(self) -> None:
         for expected in (
@@ -72,7 +74,7 @@ class CustomFirmwareContractTest(unittest.TestCase):
             "id: dialog_session_timeout",
             "id: dialog_idle_timeout",
             "delay: 10min",
-            "delay: 20s",
+            "delay: 5s",
             "id(dialog_turn_count) >= 20",
             "voice_assistant.start_continuous:",
             "Ignoring wake word during active dialog (barge-in disabled)",
@@ -94,11 +96,73 @@ class CustomFirmwareContractTest(unittest.TestCase):
         end_after_response = CONFIG.split(
             "  - id: dialog_end_after_response\n", 1
         )[1].split("\n  - id: ", 1)[0]
-        self.assertIn("- script.execute: end_dialog_session", end_after_response)
+        self.assertIn("id: end_dialog_session", end_after_response)
+        self.assertIn("idle_timeout: false", end_after_response)
         session_timeout = CONFIG.split(
             "  - id: dialog_session_timeout\n", 1
         )[1].split("\n  - id: ", 1)[0]
-        self.assertIn("- script.execute: end_dialog_session", session_timeout)
+        self.assertIn("id: end_dialog_session", session_timeout)
+        self.assertIn("idle_timeout: false", session_timeout)
+
+    def test_idle_timeout_tone_is_local_and_timeout_only(self) -> None:
+        timeout = CONFIG.split("  - id: dialog_idle_timeout\n", 1)[1].split(
+            "\n  - id: ", 1
+        )[0]
+        self.assertIn("- delay: 5s", timeout)
+        self.assertIn("idle_timeout: true", timeout)
+
+        end_session = CONFIG.split("  - id: end_dialog_session\n", 1)[1].split(
+            "\n  - id: ", 1
+        )[0]
+        self.assertLess(
+            end_session.index("- voice_assistant.stop:"),
+            end_session.index('sound_file: "dialog_idle_timeout_sound"'),
+        )
+        self.assertLess(
+            end_session.index('sound_file: "dialog_idle_timeout_sound"'),
+            end_session.index("state: 7"),
+        )
+        self.assertIn("timeout: 1s", end_session)
+        self.assertEqual(CONFIG.count("idle_timeout: true"), 1)
+        self.assertEqual(CONFIG.count("idle_timeout: false"), 8)
+
+        failure = CONFIG.split("  - id: fail_dialog_session\n", 1)[1].split(
+            "\n  - id: ", 1
+        )[0]
+        self.assertNotIn("dialog_idle_timeout_sound", failure)
+        sound = ROOT / "sounds/dialog_idle_timeout.wav"
+        self.assertTrue(sound.is_file())
+        with wave.open(str(sound), "rb") as audio:
+            self.assertEqual(1, audio.getnchannels())
+            self.assertEqual(2, audio.getsampwidth())
+            self.assertEqual(48_000, audio.getframerate())
+            self.assertLessEqual(audio.getnframes() / audio.getframerate(), 0.5)
+        self.assertIn(
+            "file: ${dialog_idle_timeout_sound_file}",
+            CONFIG,
+        )
+
+    def test_stt_exit_phrases_are_normalized_exact_matches(self) -> None:
+        stt_end = CONFIG.split("  on_stt_end:\n", 1)[1].split(
+            "  on_intent_progress:", 1
+        )[0]
+        for phrase in (
+            "stop",
+            "stopp",
+            "tschüss",
+            "tschüs",
+            "ciao",
+            "bye",
+            "goodbye",
+            "auf wiedersehen",
+            "dialog beenden",
+        ):
+            self.assertIn(f'normalized == "{phrase}"', stt_end)
+        self.assertIn("std::isspace", stt_end)
+        self.assertIn("std::ispunct", stt_end)
+        self.assertIn("std::tolower", stt_end)
+        self.assertIn('normalized.append("\\xC3\\xBC")', stt_end)
+        self.assertNotIn("normalized.find", stt_end)
 
     def test_dialog_led_feedback_is_simplified(self) -> None:
         for expected in (

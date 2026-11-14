@@ -22,28 +22,39 @@ startet. Der Schalter ist in der Custom Firmware standardmäßig aktiviert.
 Eine Session endet bei einem der folgenden Ereignisse:
 
 - lokales Sleep Word `Stop`,
-- erkannter STT-Text `Tschüss`, `Tschüs`, `Bye`, `Goodbye`,
-  `Auf Wiedersehen` oder `Dialog beenden`,
+- exakt erkannter STT-Text `Stop`, `Stopp`, `Tschüss`, `Tschüs`, `Ciao`,
+  `Bye`, `Goodbye`, `Auf Wiedersehen` oder `Dialog beenden`,
 - Druck auf die mittlere Taste,
 - Hardware- oder Software-Mute,
 - Verlust der Home-Assistant-Verbindung,
 - Voice-Assistant-Fehler,
-- zwanzig Sekunden ohne Sprachbeginn, während das Gerät auf eine Frage wartet,
+- fünf Sekunden ohne Sprachbeginn, während das Gerät auf eine Frage wartet,
 - zehn Minuten Gesamtlaufzeit,
 - nach der vollständig gesprochenen zwanzigsten Antwort.
 
-Der 20-Sekunden-Leerlauf-Timer startet, sobald die Pipeline auf eine Frage
+Der 5-Sekunden-Leerlauf-Timer startet, sobald die Pipeline auf eine Frage
 wartet, und wird nach jeder Antwort neu gestartet. Beim ersten VAD-Sprachbeginn
 wird er sofort gestoppt; während Verarbeitung, Remote-ACK, TTS, Ende und Fehler
 läuft er nicht. Das Zehn-Minuten-Limit gilt für die gesamte Session und wird
 durch Folgeturns nicht verlängert. Der Leerlauf-Timer wird auf allen normalen
 und Fehler-Exit-Pfaden gestoppt.
 
-Der Sessionstatus wird nie über einen Neustart hinweg wiederhergestellt. Der
-lokale `Stop`-Detektor ist der deterministische Exit-Pfad. Die über STT
-gefundenen Exit-Phrasen sind ein zusätzlicher Best-Effort-Pfad; Home Assistant
-kann den Text bereits verarbeitet haben, bevor ein Abbruch vollständig am
-Server angekommen ist.
+Nur ein reiner Exit-Befehl wird nach Normalisierung erkannt: Groß-/Kleinschreibung,
+äußere Leerzeichen und Satzzeichen spielen keine Rolle; zusätzliche Wörter oder
+innere Satzzeichen lösen keinen Exit aus. `Stop` ist das lokale Sleep-Word-
+Modell und beendet die Session deterministisch. Die übrigen STT-Exit-Phrasen
+sind Best Effort; Home Assistant kann den Text bereits verarbeitet haben,
+bevor ein Abbruch vollständig am Server angekommen ist.
+
+Wenn ausschließlich der Leerlauf-Timeout abläuft, stoppt die Firmware zuerst
+die laufende Voice-Assistant-Aktivität und spielt anschließend genau einmal den
+lokalen, kurzen Ton aus `sounds/dialog_idle_timeout.wav`. Danach folgt der
+bestehende einzelne orangefarbene Abschlussimpuls und der Zustand wechselt zu
+`sleeping`; für den nächsten Turn ist ein neues Wake Word erforderlich. Die
+Wiedergabe wartet begrenzt auf den lokalen Player, damit ein Audiofehler den
+Übergang in Idle nicht blockiert. Manuelle Exits und Fehlerpfade spielen den
+Timeout-Ton nicht; Fehler bleiben rot. Remote-ACK und normale TTS-Antworten
+bleiben unverändert.
 
 ## Dialogzustände und LED-Anzeigen
 
@@ -140,6 +151,9 @@ Die Herkunft und der genaue Commit sind in
 
 - Kein Barge-in: Normale Wake Words werden während einer aktiven Session
   ignoriert. `Stop` beendet die Session, startet aber keinen neuen Turn.
+- `Stop` ist das einzige lokale Sleep-Word-Modell. `Stopp`, `Tschüss`, `Tschüs`,
+  `Ciao` und die weiteren Exit-Phrasen werden erst im erkannten STT-Text geprüft
+  und sind daher keine garantierten lokalen Wake-Word-Erkennungen.
 - Die Standard-VAD von Home Assistant bestimmt Sprachbeginn und Sprachende.
 - Die Firmware kann nicht garantieren, dass STT-basierte Exit-Phrasen den
   Remote-Agenten nie erreichen; dafür wäre ein eigenes lokales Sleep-Word-
@@ -165,6 +179,15 @@ Die Custom Firmware deaktiviert weiterhin den offiziellen HTTP-Updater. OTA
 über ESPHome und USB bleiben erhalten. Vor einem Flash müssen der lokale Build,
 ein bekannt gutes OTA-Rollback-Image und der offizielle USB-Recovery-Pfad
 geprüft sein.
+
+Der Timeout-Ton und die STT-Normalisierung sind mit Contract-Tests geprüft,
+aber noch **nicht hardwarevalidiert**. Zu prüfen sind insbesondere die
+Unterstützung des WAV-Artefakts im lokalen Audio-Pfad, die hörbare Lautstärke,
+einmalige Wiedergabe ohne Abschneiden sowie das Zusammenspiel mit dem
+orangefarbenen Impuls. Bei Problemen nach einer ausdrücklich freigegebenen
+Installation Firmware und Bridge gemeinsam auf das vorherige, bekannte gute
+Versionspaar zurückrollen; falls OTA nicht verfügbar ist, den offiziellen
+USB-Recovery-Pfad aus `docs/ota-flashing.md` verwenden.
 
 **Diese Dokumentation erteilt keine Flash-Freigabe. Das Produktionsgerät in
 der Küche darf erst nach ausdrücklicher Zustimmung aktualisiert werden.**
