@@ -150,6 +150,32 @@ class CustomFirmwareContractTest(unittest.TestCase):
         ):
             self.assertIn(state, DOC)
 
+    def test_all_embedded_sounds_are_release_local(self) -> None:
+        self.assertNotIn("raw/dev/sounds/", CONFIG)
+        sound_substitutions = [
+            line.strip()
+            for line in CONFIG.splitlines()
+            if line.strip().endswith((".mp3", ".flac")) and "_sound_file:" in line
+        ]
+        self.assertGreaterEqual(len(sound_substitutions), 17)
+        for line in sound_substitutions:
+            self.assertIn(": sounds/", line)
+
+    def test_local_deployment_requires_explicit_flash_safety_inputs(self) -> None:
+        deployment = (ROOT / "scripts/deploy_firmware_release.py").read_text(
+            encoding="utf-8"
+        )
+        for expected in (
+            'FLASH_CONFIRMATION = "FLASH-KITCHEN-VOICE-PE"',
+            'parser.add_argument("--flash", action="store_true"',
+            'parser.add_argument("--device"',
+            '"--rollback-ota"',
+            '"compile"',
+            '"upload"',
+            '"--ota-platform"',
+        ):
+            self.assertIn(expected, deployment)
+
     def test_remote_ack_is_local_and_guarded(self) -> None:
         sound = ROOT / "sounds/remote_ack_einen_moment.mp3"
         self.assertTrue(sound.is_file())
