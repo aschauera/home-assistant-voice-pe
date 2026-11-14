@@ -14,10 +14,15 @@ Die Custom Firmware unterstützt einen begrenzten halbduplexen Dialog über die
 bestehende Home-Assistant-Assist-Pipeline. Ein Wake Word öffnet die Session;
 nach jeder Antwort wartet das Gerät ohne neues Wake Word auf den nächsten Turn.
 `Stop`, definierte Exit-Phrasen, Mute, die mittlere Taste, Fehler, zehn Minuten
-Gesamtlaufzeit oder zwanzig Antworten beenden sie. Während auf eine Frage
-gewartet wird, beenden zwanzig Sekunden ohne Sprachbeginn die Session. Der
+Gesamtlaufzeit oder zwanzig Antworten beenden sie. Als exakte, nach STT
+erkannte Exit-Phrasen gelten `Stop`, `Stopp`, `Tschüss`, `Tschüs`, `Ciao`,
+`Bye`, `Goodbye`, `Auf Wiedersehen` und `Dialog beenden`. Nur `Stop` ist das
+lokale Sleep-Word-Modell; alle STT-Phrasen sind Best Effort. Während auf eine
+Frage gewartet wird, beenden fünf Sekunden ohne Sprachbeginn die Session. Der
 Leerlauf-Timeout startet nach jeder Antwort neu und wird mit dem ersten
-Sprachbeginn angehalten.
+Sprachbeginn angehalten. Nur dieser Timeout spielt einmalig einen kurzen,
+lokalen Bestätigungston vor dem orangefarbenen Abschlussimpuls ab. Manuelle
+Exits und Fehler spielen diesen Ton nicht.
 
 Der LED-Ablauf bleibt über Dialogzustände hinweg ruhig: ein kurzer grüner Ring
 öffnet die Session; Warten und Zuhören teilen denselben violett atmenden Ring;
@@ -35,6 +40,13 @@ selbst kann lokal und remote nicht unterscheiden.
 Architektur, Zustandsübergänge, LED-Prioritäten, Integrationsvertrag, Grenzen
 und Rollback sind in [`docs/dialogmodus.md`](docs/dialogmodus.md) dokumentiert.
 Barge-in und Full-Duplex sind ausdrücklich nicht Bestandteil dieser Version.
+
+Der Timeout-Ton und die Exit-Phrasen sind **nicht hardwarevalidiert**. Die
+lokale Audioausgabe kann je nach Gerätelautstärke oder Audiopfad zu leise,
+verzögert oder abgeschnitten sein. Risiken, Testvoraussetzungen und der
+Rollback auf ein bekannt gutes Firmware-/Bridge-Paar stehen in
+[`docs/ota-flashing.md`](docs/ota-flashing.md); diese Änderung erteilt keine
+Flash-Freigabe.
 
 ## Nanobot LED override
 

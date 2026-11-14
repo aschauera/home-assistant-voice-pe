@@ -36,6 +36,7 @@ substitutions:
   # Pre-rendered de-AT acknowledgement. It is played locally only when the
   # configured remote conversation agent explicitly invokes the API action.
   remote_ack_sound_file: sounds/remote_ack_einen_moment.mp3
+  dialog_idle_timeout_sound_file: sounds/dialog_idle_timeout.wav
 
 esphome:
   name: home-assistant-voice
@@ -248,7 +249,9 @@ switch:
           condition:
             lambda: return id(dialog_session_active);
           then:
-            - script.execute: end_dialog_session
+            - script.execute:
+                id: end_dialog_session
+                idle_timeout: false
       - if:
           condition:
             binary_sensor.is_off: hardware_mute_switch
@@ -285,7 +288,9 @@ switch:
           condition:
             lambda: return id(dialog_session_active);
           then:
-            - script.execute: end_dialog_session
+            - script.execute:
+                id: end_dialog_session
+                idle_timeout: false
   - platform: template
     id: disable_buttons
     name: Disable physical controls
@@ -409,7 +414,9 @@ binary_sensor:
                                 condition:
                                   lambda: return id(dialog_session_active);
                                 then:
-                                  - script.execute: end_dialog_session
+                                  - script.execute:
+                                      id: end_dialog_session
+                                      idle_timeout: false
                                 else:
                                   - voice_assistant.stop:
                           else:
@@ -601,7 +608,9 @@ binary_sensor:
           condition:
             lambda: return id(dialog_session_active);
           then:
-            - script.execute: end_dialog_session
+            - script.execute:
+                id: end_dialog_session
+                idle_timeout: false
       # Play mute on sound only if software mute isn't enabled
       - if:
           condition:
@@ -1286,9 +1295,11 @@ script:
             - voice_assistant.start_continuous:
 
   # End the open dialog on Stop, a recognized exit phrase, mute, the center
-  # button, timeout or an error. Sessions never survive a reboot/disconnect.
+  # button or timeout. Only the idle timeout plays its local confirmation tone.
   - id: end_dialog_session
     mode: restart
+    parameters:
+      idle_timeout: bool
     then:
       - script.stop: dialog_idle_timeout
       - script.stop: dialog_session_timeout
@@ -1315,6 +1326,30 @@ script:
             switch.is_off: timer_ringing
           then:
             - micro_wake_word.disable_model: stop
+      - if:
+          condition:
+            lambda: return idle_timeout;
+          then:
+            - script.execute:
+                id: play_sound
+                priority: true
+                sound_file: "dialog_idle_timeout_sound"
+            - wait_until:
+                condition:
+                  media_player.is_announcing:
+                    id: external_media_player
+                timeout: 1s
+            - if:
+                condition:
+                  media_player.is_announcing:
+                    id: external_media_player
+                then:
+                  - wait_until:
+                      condition:
+                        not:
+                          media_player.is_announcing:
+                            id: external_media_player
+                      timeout: 1s
       - script.execute:
           id: set_nanobot_led_state
           state: 7
@@ -1353,19 +1388,23 @@ script:
     mode: restart
     then:
       - delay: 10min
-      - script.execute: end_dialog_session
+      - script.execute:
+          id: end_dialog_session
+          idle_timeout: false
 
   # Limit silence only while a new question is expected. VAD cancels it at
   # speech start; the next listening phase arms it again.
   - id: dialog_idle_timeout
     mode: restart
     then:
-      - delay: 20s
+      - delay: 5s
       - if:
           condition:
             lambda: return id(dialog_session_active);
           then:
-            - script.execute: end_dialog_session
+            - script.execute:
+                id: end_dialog_session
+                idle_timeout: true
 
   # Let the twentieth response finish, then close instead of starting turn 21.
   - id: dialog_end_after_response
@@ -1387,7 +1426,9 @@ script:
                     media_player.is_announcing:
                       id: external_media_player
                 timeout: 2min
-      - script.execute: end_dialog_session
+      - script.execute:
+          id: end_dialog_session
+          idle_timeout: false
 
   # Fast local acknowledgement for the remote agent. Home Assistant must call
   # the API action only after local intent matching has failed.
@@ -2056,6 +2097,8 @@ audio_file:
     file: ${error_cloud_expired_sound_file}
   - id: remote_ack_einen_moment
     file: ${remote_ack_sound_file}
+  - id: dialog_idle_timeout_sound
+    file: ${dialog_idle_timeout_sound_file}
 
 media_source:
   - platform: audio_file
@@ -2193,7 +2236,9 @@ micro_wake_word:
                           condition:
                             lambda: return id(dialog_session_active);
                           then:
-                            - script.execute: end_dialog_session
+                            - script.execute:
+                                id: end_dialog_session
+                                idle_timeout: false
                           else:
                             - if:
                                 condition:
@@ -2450,30 +2495,59 @@ voice_assistant:
           return;
         }
         std::string normalized;
-        bool previous_space = true;
-        for (const unsigned char raw : x) {
-          const char c = static_cast<char>(raw);
-          if (c == '.' || c == ',' || c == '!' || c == '?' || c == ';' || c == ':') {
-            continue;
+        for (size_t i = 0; i < x.size(); ++i) {
+          const unsigned char raw = static_cast<unsigned char>(x[i]);
+          if (raw == 0xC3 && i + 1 < x.size() &&
+              static_cast<unsigned char>(x[i + 1]) == 0x9C) {
+            normalized.append("\xC3\xBC");
+            ++i;
+          } else if (std::isspace(raw)) {
+            if (!normalized.empty() && normalized.back() != ' ') {
+              normalized.push_back(' ');
+            }
+          } else {
+            normalized.push_back(static_cast<char>(
+                raw < 0x80 ? std::tolower(raw) : raw));
           }
-          if (c == ' ' || c == '\t' || c == '\n') {
-            if (!previous_space) normalized.push_back(' ');
-            previous_space = true;
-            continue;
-          }
-          normalized.push_back(static_cast<char>(std::tolower(raw)));
-          previous_space = false;
         }
-        if (!normalized.empty() && normalized.back() == ' ') normalized.pop_back();
+        size_t first = 0;
+        size_t last = normalized.size();
+        const std::string boundary_punctuation[] = {
+            "…", "„", "“", "”", "‚", "‘", "’",
+            "«", "»", "‹", "›", "–", "—"};
+        auto boundary_width = [&](bool leading) -> size_t {
+          if (first == last) return 0;
+          const unsigned char raw = static_cast<unsigned char>(
+              normalized[leading ? first : last - 1]);
+          if (raw < 0x80 && (std::isspace(raw) || std::ispunct(raw))) {
+            return 1;
+          }
+          for (const auto &punctuation : boundary_punctuation) {
+            const size_t width = punctuation.size();
+            if (width <= last - first &&
+                normalized.compare(leading ? first : last - width,
+                                   width, punctuation) == 0) {
+              return width;
+            }
+          }
+          return 0;
+        };
+        while (size_t width = boundary_width(true)) first += width;
+        while (size_t width = boundary_width(false)) last -= width;
+        normalized = normalized.substr(first, last - first);
         id(dialog_exit_requested) =
+            normalized == "stop" || normalized == "stopp" ||
             normalized == "tschüss" || normalized == "tschüs" ||
-            normalized == "bye" || normalized == "goodbye" ||
+            normalized == "ciao" || normalized == "bye" ||
+            normalized == "goodbye" ||
             normalized == "auf wiedersehen" || normalized == "dialog beenden";
     - if:
         condition:
           lambda: return id(dialog_exit_requested);
         then:
-          - script.execute: end_dialog_session
+          - script.execute:
+              id: end_dialog_session
+              idle_timeout: false
   on_intent_progress:
     - if:
         condition:

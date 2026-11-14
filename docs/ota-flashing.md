@@ -26,6 +26,23 @@ beschriebene Source-only-Pipeline gilt für alle Releases, die mit dem Workflow
   das normale Voice Preview Edition verwendet die Standardvariante.
 - Während Upload und Neustart Strom und Netzwerk nicht unterbrechen.
 
+## Hardwarevalidierung und Rollback für den Dialog-Timeout
+
+Der 5-Sekunden-Leerlauf-Timeout mit lokalem Bestätigungston ist **nicht
+hardwarevalidiert**. Vor einem genehmigten Test sind die lokale WAV-Wiedergabe,
+die eingestellte Lautstärke und der Übergang vom Ton zum orangefarbenen
+Abschlussimpuls auf einem nicht produktiven Gerät zu prüfen. Mögliche Risiken
+sind ein nicht unterstütztes Audioformat, ein zu leiser Ton, abgeschnittene
+Wiedergabe oder eine Verzögerung im lokalen Player; die Session muss auch bei
+Audiofehlern zuverlässig in `sleeping` wechseln.
+
+Bei Fehlern nach ausdrücklicher Flash-Freigabe das vor dem Update gesicherte
+OTA-Image einspielen und Firmware sowie HA Voice Bridge gemeinsam auf das
+vorherige bekannte gute Versionspaar zurücksetzen. Ist OTA nicht verfügbar,
+den offiziellen USB-Recovery-Pfad aus Abschnitt 5 verwenden. Das
+Produktionsgerät in der Küche darf ohne ausdrückliche Freigabe nicht geflasht
+werden.
+
 ## Inhalt eines Source-only-Releases
 
 Die Release-Automation veröffentlicht mindestens:
