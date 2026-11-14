@@ -6,14 +6,18 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = (ROOT / "home-assistant-voice.yaml").read_text(encoding="utf-8")
-WORKFLOW = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
+VALIDATION_WORKFLOW = (
+    ROOT / ".github/workflows/yaml-lint.yml"
+).read_text(encoding="utf-8")
 DOC = (ROOT / "docs/dialogmodus.md").read_text(encoding="utf-8")
 
 
 class CustomFirmwareContractTest(unittest.TestCase):
-    def test_esphome_version_is_pinned(self) -> None:
+    def test_esphome_version_is_pinned_without_cloud_compilation(self) -> None:
         self.assertIn("min_version: 2026.10.0", CONFIG)
-        self.assertIn("esphome-version: 2026.10.0", WORKFLOW)
+        self.assertFalse((ROOT / ".github/workflows/build.yml").exists())
+        self.assertNotIn("esphome compile", VALIDATION_WORKFLOW)
+        self.assertNotIn("esphome/workflows", VALIDATION_WORKFLOW)
 
     def test_dialog_safety_contract(self) -> None:
         for expected in (
