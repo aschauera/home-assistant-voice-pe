@@ -2512,16 +2512,28 @@ voice_assistant:
         }
         size_t first = 0;
         size_t last = normalized.size();
-        while (first < last &&
-               (std::isspace(static_cast<unsigned char>(normalized[first])) ||
-                std::ispunct(static_cast<unsigned char>(normalized[first])))) {
-          ++first;
-        }
-        while (last > first &&
-               (std::isspace(static_cast<unsigned char>(normalized[last - 1])) ||
-                std::ispunct(static_cast<unsigned char>(normalized[last - 1])))) {
-          --last;
-        }
+        const std::string boundary_punctuation[] = {
+            "…", "„", "“", "”", "‚", "‘", "’",
+            "«", "»", "‹", "›", "–", "—"};
+        auto boundary_width = [&](bool leading) -> size_t {
+          if (first == last) return 0;
+          const unsigned char raw = static_cast<unsigned char>(
+              normalized[leading ? first : last - 1]);
+          if (raw < 0x80 && (std::isspace(raw) || std::ispunct(raw))) {
+            return 1;
+          }
+          for (const auto &punctuation : boundary_punctuation) {
+            const size_t width = punctuation.size();
+            if (width <= last - first &&
+                normalized.compare(leading ? first : last - width,
+                                   width, punctuation) == 0) {
+              return width;
+            }
+          }
+          return 0;
+        };
+        while (size_t width = boundary_width(true)) first += width;
+        while (size_t width = boundary_width(false)) last -= width;
         normalized = normalized.substr(first, last - first);
         id(dialog_exit_requested) =
             normalized == "stop" || normalized == "stopp" ||
