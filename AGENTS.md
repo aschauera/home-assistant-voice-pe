@@ -34,3 +34,17 @@ Wichtige Regeln:
   aus dem Default-Branch `main` von `aschauera/NanoBotSkills` vollständig laufen.
 - Änderungen in logisch getrennten Commits halten; Tests und Dokumentation vor
   einem PR aktualisieren.
+
+## Build- und Deployment-Grenze
+
+- GitHub Copilot und GitHub Actions dürfen in diesem Repository keine Firmware
+  kompilieren, keine Firmware-Binaries erzeugen und kein Gerät flashen.
+- Insbesondere dürfen GitHub Copilot und andere Cloud-Agenten weder
+  `esphome compile` noch `esphome run` oder `esphome upload` ausführen.
+- Pull Requests werden ausschließlich mit YAML-Lint und den lokalen
+  Contract-/Unit-Tests validiert.
+- Release-Automation darf nur die versionierten YAML- und Source-Dateien
+  paketieren und mit Prüfsummen veröffentlichen.
+- Kompilierung und Flash erfolgen ausschließlich lokal durch Nanobot mit der im
+  Release festgelegten ESPHome-Version. Das Produktionsgerät darf weiterhin
+  nur nach ausdrücklicher Freigabe geflasht werden.

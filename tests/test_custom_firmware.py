@@ -1,19 +1,70 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
+import subprocess
+import tarfile
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = (ROOT / "home-assistant-voice.yaml").read_text(encoding="utf-8")
-WORKFLOW = (ROOT / ".github/workflows/build.yml").read_text(encoding="utf-8")
 DOC = (ROOT / "docs/dialogmodus.md").read_text(encoding="utf-8")
 
 
 class CustomFirmwareContractTest(unittest.TestCase):
-    def test_esphome_version_is_pinned(self) -> None:
+    def test_esphome_version_is_pinned_without_cloud_compilation(self) -> None:
         self.assertIn("min_version: 2026.10.0", CONFIG)
-        self.assertIn("esphome-version: 2026.10.0", WORKFLOW)
+        self.assertFalse((ROOT / ".github/workflows/build.yml").exists())
+        workflows = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in (ROOT / ".github/workflows").glob("*.yml")
+        )
+        for forbidden in (
+            "esphome compile",
+            "esphome run",
+            "esphome upload",
+            "esphome/workflows",
+        ):
+            self.assertNotIn(forbidden, workflows)
+
+    def test_release_packager_emits_yaml_source_bundle_and_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output = Path(temporary_directory)
+            subprocess.run(
+                [
+                    "python3",
+                    str(ROOT / "scripts/package_firmware_release.py"),
+                    "--tag",
+                    "v1.4.2",
+                    "--commit",
+                    "0" * 40,
+                    "--output",
+                    str(output),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            metadata = json.loads(
+                (output / "firmware-release.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual("2026.10.0", metadata["esphome_version"])
+            self.assertEqual("v1.4.2", metadata["tag"])
+            for name in (
+                "home-assistant-voice.yaml",
+                "home-assistant-voice.factory.yaml",
+                "home-assistant-voice.8mb.yaml",
+                "SHA256SUMS.txt",
+            ):
+                self.assertTrue((output / name).is_file(), name)
+            archive = output / metadata["source_archive"]
+            with tarfile.open(archive, "r:gz") as bundle:
+                members = set(bundle.getnames())
+            self.assertIn("home-assistant-voice.factory.yaml", members)
+            self.assertIn("custom_components/voice_assistant/voice_assistant.cpp", members)
+            self.assertIn("sounds/remote_ack_einen_moment.mp3", members)
 
     def test_dialog_safety_contract(self) -> None:
         for expected in (
@@ -98,6 +149,32 @@ class CustomFirmwareContractTest(unittest.TestCase):
             "error",
         ):
             self.assertIn(state, DOC)
+
+    def test_all_embedded_sounds_are_release_local(self) -> None:
+        self.assertNotIn("raw/dev/sounds/", CONFIG)
+        sound_substitutions = [
+            line.strip()
+            for line in CONFIG.splitlines()
+            if line.strip().endswith((".mp3", ".flac")) and "_sound_file:" in line
+        ]
+        self.assertGreaterEqual(len(sound_substitutions), 17)
+        for line in sound_substitutions:
+            self.assertIn(": sounds/", line)
+
+    def test_local_deployment_requires_explicit_flash_safety_inputs(self) -> None:
+        deployment = (ROOT / "scripts/deploy_firmware_release.py").read_text(
+            encoding="utf-8"
+        )
+        for expected in (
+            'FLASH_CONFIRMATION = "FLASH-KITCHEN-VOICE-PE"',
+            'parser.add_argument("--flash", action="store_true"',
+            'parser.add_argument("--device"',
+            '"--rollback-ota"',
+            '"compile"',
+            '"upload"',
+            '"--ota-platform"',
+        ):
+            self.assertIn(expected, deployment)
 
     def test_remote_ack_is_local_and_guarded(self) -> None:
         sound = ROOT / "sounds/remote_ack_einen_moment.mp3"

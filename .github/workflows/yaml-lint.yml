@@ -1,29 +1,27 @@
-name: YAML lint
+name: Source validation
 
 on:
   push:
     branches: [dev]
-    paths:
-      - "**.yaml"
-      - "**.yml"
   pull_request:
   workflow_dispatch:
 
-jobs:
-  yamllint:
-    name: 🧹 yamllint
-    runs-on: ubuntu-latest
-    steps:
-      - name: ⤵️ Check out configuration from GitHub
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
-      - name: 🚀 Run yamllint
-        run: yamllint --strict .
+permissions:
+  contents: read
 
-  open-mic-contract-tests:
-    name: Open mic firmware contract tests
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-source:
+    name: YAML lint and contract tests
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Check out configuration
+      - name: Check out source
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - name: Run strict YAML lint
+        run: yamllint --strict .
       - name: Run contract tests
         run: python3 -m unittest discover -s tests -v
