@@ -1,0 +1,60 @@
+name: Publish firmware sources
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to repair, for example v1.4.3
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-sources-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  publish-sources:
+    name: Attach YAML and immutable source bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Resolve release commit
+        id: release
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: |
+          commit="$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')"
+          object_type="$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.type')"
+          if [ "$object_type" = "tag" ]; then
+            commit="$(gh api "repos/$GH_REPO/git/tags/$commit" --jq '.object.sha')"
+          fi
+          test "${#commit}" -eq 40
+          printf 'commit=%s\n' "$commit" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact release tag
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Run source contract tests
+        run: python3 -m unittest discover -s tests -v
+
+      - name: Package release sources
+        run: |
+          python3 scripts/package_firmware_release.py \
+            --tag "$RELEASE_TAG" \
+            --commit "${{ steps.release.outputs.commit }}" \
+            --output dist/release
+
+      - name: Upload source assets to release
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "$RELEASE_TAG" dist/release/* --repo "$GH_REPO" --clobber

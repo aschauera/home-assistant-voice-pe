@@ -156,14 +156,15 @@ Die Herkunft und der genaue Commit sind in
 
 ## Build und Rollback
 
-CI kompiliert beide Varianten mit ESPHome 2026.10.0:
-
-- `home-assistant-voice.factory.yaml`
-- `home-assistant-voice.8mb.yaml`
+CI führt ausschließlich YAML-Lint und Contract-/Unit-Tests aus. Releases
+enthalten die versionierten YAML- und Source-Dateien, aber keine kompilierten
+Firmware-Binaries. Nanobot prüft und kompiliert die Standard- oder
+Acht-Megabyte-Variante lokal mit der im Release festgelegten ESPHome-Version.
 
 Die Custom Firmware deaktiviert weiterhin den offiziellen HTTP-Updater. OTA
-über ESPHome und USB bleiben erhalten. Vor einem Flash sind die CI-Artefakte zu
-prüfen und das offizielle Factory-Image als Rollback-Pfad bereitzuhalten.
+über ESPHome und USB bleiben erhalten. Vor einem Flash müssen der lokale Build,
+ein bekannt gutes OTA-Rollback-Image und der offizielle USB-Recovery-Pfad
+geprüft sein.
 
 **Diese Dokumentation erteilt keine Flash-Freigabe. Das Produktionsgerät in
 der Küche darf erst nach ausdrücklicher Zustimmung aktualisiert werden.**

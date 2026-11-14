@@ -44,15 +44,28 @@ Ein Verweis auf einen Branch oder auf `latest` reicht nicht, weil diese Ziele ve
      --json tagName,isPrerelease,targetCommitish,url
    ```
 
-2. Factory- und Acht-Megabyte-Variante aus dem Zielcommit bauen.
-3. Beide Artefaktarchive, Manifeste und SHA-256-Prüfsummen kontrollieren.
-4. Release-Notes müssen mindestens enthalten:
+2. Projektversion und Tag angleichen und den Zielcommit taggen. GitHub Actions
+   darf dabei keine Firmware kompilieren.
+3. Release veröffentlichen. Der Workflow `Publish firmware sources` hängt die
+   drei YAML-Dateien, das vollständige Source-Paket, `firmware-release.json` und
+   `SHA256SUMS.txt` an das Release.
+4. Die veröffentlichten Quellen mit
+   `scripts/deploy_firmware_release.py <TAG>` lokal auf dem Nanobot-Pi prüfen und
+   mit der im Release festgelegten ESPHome-Version kompilieren.
+5. Release-Notes müssen mindestens enthalten:
    - Firmware-SemVer `1.4.2`, gemeinsamer Tag `v1.4.2` und Commit;
    - direkten Link zur kompatiblen Bridge-Version;
-   - Build- und Teststatus;
+   - Status von Source-Tests und lokalem Build;
+   - Prüfsumme des lokal erzeugten OTA-Images;
    - Hinweis auf OTA-, USB- und Rollback-Pfad.
-5. Ohne gemeinsame Hardwarevalidierung nur als Pre-Release veröffentlichen.
-6. Nach Veröffentlichung beide Release-Seiten erneut auf Tag, Commit, Status und gegenseitige Links prüfen.
+6. Ohne gemeinsame Hardwarevalidierung nur als Pre-Release veröffentlichen.
+7. Nach Veröffentlichung beide Release-Seiten erneut auf Tag, Commit, Status,
+   Source-Assets und gegenseitige Links prüfen.
+
+Ein Release enthält keine in GitHub Actions kompilierten Binaries. OTA- und
+Factory-Images entstehen ausschließlich lokal. Ein erfolgreicher lokaler Build
+berechtigt nicht zum Flashen; das produktive Gerät erfordert weiterhin Aschis
+ausdrückliche Freigabe.
 
 ## Veröffentlichung einer Bridge-Version
 
