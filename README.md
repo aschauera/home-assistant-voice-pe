@@ -68,62 +68,38 @@ data:
 
 The exact entity ID is assigned by Home Assistant and may differ.
 
-## Building and installing
+## Bauen und installieren
 
-The GitHub Actions **Build** workflow validates both firmware variants with
-ESPHome 2026.10.0 and publishes build artifacts. The custom firmware intentionally disables the
-official HTTP updater so an upstream release cannot silently overwrite it;
-future updates are installed through ESPHome OTA or USB.
+GitHub kompiliert diese Firmware bewusst **nicht**. Pull Requests und Pushes auf
+`dev` führen nur striktes YAML-Lint und die Contract-/Unit-Tests aus. Auch die
+Release-Automation erzeugt keine Binaries: Sie hängt die drei versionierten
+YAML-Dateien, ein vollständiges Source-Paket, Build-Metadaten und
+SHA-256-Prüfsummen an das GitHub-Release.
 
-Do not flash an untested artifact onto the only production Voice PE. Download
-the workflow artifact and use `home-assistant-voice-esp32s3.factory.bin` for the
-initial USB installation. Keep the official web installer as the rollback path:
+Nanobot lädt ein unveränderliches Release lokal herunter, verifiziert Tag,
+Commit und Prüfsummen und kompiliert es mit der im Release festgelegten
+ESPHome-Version. Ohne `--flash` endet der Ablauf nach dem lokalen Build:
 
-https://esphome.github.io/home-assistant-voice-pe/
+```bash
+cd /home/nanobot/home-assistant-voice-pe
+python3 scripts/deploy_firmware_release.py vX.Y.Z
+```
 
-### Vorkompiliertes Release per OTA installieren
+Ein OTA-Flash ist ein eigener, ausdrücklich freizugebender Schritt. Das Script
+verlangt dafür die Geräteadresse, ein vorhandenes bekannt gutes Rollback-Image
+und die exakte Flash-Bestätigung. Das einzige produktive Kitchen Voice PE wird
+niemals allein aufgrund eines Builds oder Releases geflasht.
 
-Die vollständige agentenlesbare Anleitung mit Download, Prüfsummenprüfung,
-Erreichbarkeitstest, Upload, Verifikation und Rollback steht unter
+Die vollständige Anleitung steht unter
 [`docs/ota-flashing.md`](docs/ota-flashing.md). Die verbindliche Zuordnung von
 Firmware- und Bridge-Releases steht unter
 [`docs/release-pairing.md`](docs/release-pairing.md).
 
-Kurzablauf für das Standard-Voice-PE; `VOICE_PE_IP` durch die echte Adresse
-ersetzen und das Produktionsgerät nur nach ausdrücklicher Freigabe flashen:
+Für OTA wird ausschließlich das lokal erzeugte `.ota.bin` verwendet.
+`.factory.bin` ist nur für USB-Installation oder Recovery bestimmt. Der
+offizielle Webinstaller bleibt der letzte Recovery-Pfad:
 
-```bash
-export FIRMWARE_RELEASE="v1.4.2"
-export FIRMWARE_REPO="/home/nanobot/home-assistant-voice-pe"
-export FIRMWARE_DIR="$HOME/Downloads/voice-pe-$FIRMWARE_RELEASE"
-export VOICE_PE_IP="192.168.4.REPLACE_ME"
-
-mkdir -p "$FIRMWARE_DIR"
-cd "$FIRMWARE_DIR"
-gh release download "$FIRMWARE_RELEASE" \
-  --repo aschauera/home-assistant-voice-pe \
-  --pattern "home-assistant-voice-$FIRMWARE_RELEASE.zip" \
-  --pattern "SHA256SUMS.txt" \
-  --clobber
-grep "  home-assistant-voice-$FIRMWARE_RELEASE.zip$" SHA256SUMS.txt \
-  | sha256sum -c -
-unzip -o "home-assistant-voice-$FIRMWARE_RELEASE.zip"
-
-python3 -m venv "$HOME/.venvs/esphome-2026.10.0"
-source "$HOME/.venvs/esphome-2026.10.0/bin/activate"
-python -m pip install "esphome==2026.10.0"
-
-esphome upload "$FIRMWARE_REPO/home-assistant-voice.yaml" \
-  --device "$VOICE_PE_IP" \
-  --file "$FIRMWARE_DIR/home-assistant-voice-esp32s3.ota.bin" \
-  --ota-platform esphome
-```
-
-Für OTA ausschließlich die Datei mit dem Suffix `.ota.bin` verwenden. Die
-`.factory.bin` ist für USB-Installation oder Recovery bestimmt. Ein CLI-OTA
-löscht die Gerätekonfiguration im ESPHome Device Builder nicht; ein späteres
-`Install -> Wirelessly` aus dessen Weboberfläche kann die Custom Firmware aber
-mit der dort gespeicherten YAML überschreiben.
+https://esphome.github.io/home-assistant-voice-pe/
 
 For upstream setup and troubleshooting, see
 https://voice-pe.home-assistant.io/.

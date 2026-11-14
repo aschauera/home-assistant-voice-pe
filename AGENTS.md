@@ -39,8 +39,8 @@ Wichtige Regeln:
 
 - GitHub Copilot und GitHub Actions dürfen in diesem Repository keine Firmware
   kompilieren, keine Firmware-Binaries erzeugen und kein Gerät flashen.
-- Insbesondere dürfen Agenten weder `esphome compile` noch `esphome run` oder
-  `esphome upload` ausführen.
+- Insbesondere dürfen GitHub Copilot und andere Cloud-Agenten weder
+  `esphome compile` noch `esphome run` oder `esphome upload` ausführen.
 - Pull Requests werden ausschließlich mit YAML-Lint und den lokalen
   Contract-/Unit-Tests validiert.
 - Release-Automation darf nur die versionierten YAML- und Source-Dateien

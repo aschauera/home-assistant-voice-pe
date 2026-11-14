@@ -1,258 +1,175 @@
-# Vorkompilierte Open-Mic-Firmware per ESPHome CLI und OTA installieren
+# Firmware lokal bauen und kontrolliert per OTA installieren
 
-Diese Anleitung beschreibt ausschließlich das Netzwerk-OTA-Update mit dem
-vorkompilierten Release-Artefakt. Sie kompiliert die Firmware nicht neu und
-verändert die im Home-Assistant-ESPHome-Device-Builder gespeicherte YAML nicht.
+GitHub Actions kompiliert in diesem Repository keine Firmware. Ein Release
+enthält ausschließlich die versionierten YAML-Dateien, die benötigten lokalen
+Quellen und Sounds, Metadaten sowie SHA-256-Prüfsummen. Nanobot lädt dieses
+unveränderliche Paket auf den lokalen Host, prüft es und kompiliert es dort mit
+der exakt festgelegten ESPHome-Version.
 
-## Sicherheits- und Kompatibilitätsgrenzen
+Das historische Release `v1.4.2` enthält noch vorkompilierte Binaries. Die hier
+beschriebene Source-only-Pipeline gilt für alle Releases, die mit dem Workflow
+`Publish firmware sources` veröffentlicht werden.
 
-- `v1.4.2` ist ein gekoppeltes Pre-Release und noch nicht gemeinsam auf der
-  produktiven Kitchen Voice PE hardwarevalidiert. Installation nur nach
-  erfolgreicher Artefaktprüfung, dokumentiertem Rollback-Pfad und ausdrücklicher
-  Flash-Freigabe.
-- Nur das identische Versionspaar verwenden:
-  - Voice-PE-Firmware `1.4.2` mit Tag `v1.4.2` aus diesem Repository;
-  - HA Voice Bridge `1.4.2` mit Tag `v1.4.2` aus dem Default-Branch `main` von
-    `aschauera/NanoBotSkills`.
-- Für künftige Paare müssen Firmware und Bridge dieselbe SemVer und denselben
-  `v`-Tag verwenden. Historische Paare werden nicht umbenannt.
-- Für OTA immer `home-assistant-voice-esp32s3.ota.bin` verwenden.
-- `home-assistant-voice-esp32s3.factory.bin` ist für USB-Erstinstallation oder
-  Recovery und darf nicht als OTA-Abbild verwendet werden.
-- Die Variante `ha-voice-8mb-esp32s3.ota.bin` nur verwenden, wenn das konkrete
-  Gerät nachweislich die Acht-Megabyte-Konfiguration benötigt. Für das normale
-  Home Assistant Voice Preview Edition ist das Standardartefakt vorgesehen.
-- Das einzige produktive Gerät in der Küche nicht ohne ausdrückliche Freigabe
-  flashen.
+## Sicherheitsgrenzen
+
+- Firmware und HA Voice Bridge müssen dieselbe SemVer und denselben `v`-Tag
+  verwenden.
+- GitHub Copilot und GitHub Actions dürfen weder kompilieren noch flashen.
+- Ein erfolgreicher lokaler Build ist **keine** Flash-Freigabe.
+- Das produktive Kitchen Voice PE darf nur nach ausdrücklicher Freigabe durch
+  Aschi geflasht werden.
+- Vor jedem Flash muss ein bekannt gutes OTA-Rollback-Image lokal vorhanden
+  sein.
+- Für Netzwerk-OTA ausschließlich das lokal erzeugte `.ota.bin` verwenden.
+- `.factory.bin` ist ausschließlich für USB-Installation oder Recovery.
+- Die Acht-Megabyte-Variante nur für nachweislich passende Hardware verwenden;
+  das normale Voice Preview Edition verwendet die Standardvariante.
 - Während Upload und Neustart Strom und Netzwerk nicht unterbrechen.
 
-## Voraussetzungen
+## Inhalt eines Source-only-Releases
 
-Benötigt werden:
+Die Release-Automation veröffentlicht mindestens:
 
-- Python drei mit `venv`;
-- GitHub CLI `gh`, angemeldet für den Zugriff auf das Repository;
-- Netzwerkzugriff vom ausführenden Rechner zum Voice PE;
-- die IP-Adresse des Voice PE;
-- ein lokaler Checkout dieses Repositorys auf dem Default-Branch `dev`.
+- `home-assistant-voice.yaml`;
+- `home-assistant-voice.factory.yaml`;
+- `home-assistant-voice.8mb.yaml`;
+- `home-assistant-voice-source-vX.Y.Z.tar.gz` mit lokalen Komponenten und Sounds;
+- `firmware-release.json` mit Tag, Commit, ESPHome-Version und Entrypoints;
+- `SHA256SUMS.txt`.
 
-Auf dem Nanobot-Pi ist der bekannte Checkout:
+Es werden ausdrücklich keine Firmware-Binaries in GitHub Actions erzeugt.
 
-```text
-/home/nanobot/home-assistant-voice-pe
-```
+## Voraussetzungen auf dem Nanobot-Pi
 
-Die IP-Adresse muss aus Home Assistant, ESPHome Device Builder oder UniFi
-ermittelt werden. Nicht raten und nicht dauerhaft in das Repository schreiben.
+- angemeldete GitHub CLI `gh`;
+- lokaler Checkout `/home/nanobot/home-assistant-voice-pe`;
+- Python drei;
+- isolierte ESPHome-Installation in
+  `~/.venvs/esphome-<VERSION>/bin/esphome`;
+- Netzwerkzugriff zum Voice PE nur für den späteren OTA-Schritt.
 
-## 1. Variablen setzen
-
-`VOICE_PE_IP` vor dem Ausführen durch die tatsächliche IP-Adresse ersetzen:
-
-```bash
-export FIRMWARE_RELEASE="v1.4.2"
-export FIRMWARE_REPO="/home/nanobot/home-assistant-voice-pe"
-export FIRMWARE_DIR="$HOME/Downloads/voice-pe-$FIRMWARE_RELEASE"
-export VOICE_PE_IP="192.168.4.REPLACE_ME"
-```
-
-Branch und Working Tree prüfen:
+Die ESPHome-Version wird nicht stillschweigend aktualisiert. Fehlt die im
+Release verlangte Version, muss sie zuerst explizit in einer isolierten
+virtuellen Umgebung installiert werden:
 
 ```bash
-cd "$FIRMWARE_REPO"
-git switch dev
-git pull --ff-only
-git status --short --branch
+python3 -m venv "$HOME/.venvs/esphome-<VERSION>"
+"$HOME/.venvs/esphome-<VERSION>/bin/python" -m pip install \
+  "esphome==<VERSION>"
 ```
 
-Der Working Tree muss sauber sein und `dev...origin/dev` anzeigen.
+## 1. Release lokal herunterladen, prüfen und kompilieren
 
-## 2. Release herunterladen
+Der normale Ablauf baut die Standardvariante und flasht **nicht**:
 
 ```bash
-mkdir -p "$FIRMWARE_DIR"
-cd "$FIRMWARE_DIR"
-
-gh release download "$FIRMWARE_RELEASE" \
-  --repo aschauera/home-assistant-voice-pe \
-  --pattern "home-assistant-voice-$FIRMWARE_RELEASE.zip" \
-  --pattern "SHA256SUMS.txt" \
-  --clobber
+cd /home/nanobot/home-assistant-voice-pe
+python3 scripts/deploy_firmware_release.py vX.Y.Z
 ```
 
-Zuerst das unveränderte Release-Archiv prüfen:
+Das Script führt dabei aus:
+
+1. alle Release-Assets mit `gh release download` herunterladen;
+2. jede Datei gegen `SHA256SUMS.txt` prüfen;
+3. Release-Tag und Commit gegen `firmware-release.json` prüfen;
+4. das Source-Paket sicher entpacken;
+5. die separat veröffentlichten YAML-Dateien bytegenau mit dem Source-Paket
+   vergleichen;
+6. die exakte ESPHome-Version prüfen;
+7. lokal `esphome compile` für den im Release festgelegten Entrypoint ausführen;
+8. OTA- und Factory-Image samt lokaler SHA-256-Werte unter
+   `~/.cache/voice-pe-firmware/<TAG>/build/` ablegen.
+
+Für nachweisliche Acht-Megabyte-Hardware:
 
 ```bash
-grep "  home-assistant-voice-$FIRMWARE_RELEASE.zip$" SHA256SUMS.txt \
-  | sha256sum -c -
+python3 scripts/deploy_firmware_release.py vX.Y.Z --variant 8mb
 ```
 
-Erwartete Ausgabe:
+Der lokale Build erzeugt außerdem `local-build.json`. Diese Datei dokumentiert
+Release-Commit, Variante, ESPHome-Version, Entrypoint und Prüfsummen der lokal
+erzeugten Images.
 
-```text
-home-assistant-voice-v1.4.2.zip: OK
-```
+## 2. Build prüfen
 
-Archiv entpacken:
+Vor einer Flash-Freigabe mindestens kontrollieren:
 
 ```bash
-unzip -o "home-assistant-voice-$FIRMWARE_RELEASE.zip"
-ls -lh home-assistant-voice-esp32s3.ota.bin manifest.json
+cat "$HOME/.cache/voice-pe-firmware/vX.Y.Z/build/local-build.json"
+ls -lh "$HOME/.cache/voice-pe-firmware/vX.Y.Z/build/"
 ```
 
-## 3. OTA-Abbild gegen das Manifest prüfen
+Zusätzlich müssen erfolgreich sein:
 
-Das folgende Kommando liest die erwartete SHA-256-Prüfsumme direkt aus dem
-mitgelieferten Manifest und vergleicht sie mit der entpackten OTA-Datei:
+- Source-Contract-Tests und YAML-Lint;
+- passendes Bridge-Release mit demselben Tag;
+- erreichbares Voice PE;
+- vorhandenes, bekannt gutes Rollback-OTA-Image;
+- dokumentierter USB-Recovery-Pfad.
+
+## 3. OTA nur nach ausdrücklicher Freigabe
+
+Erst nach Aschis ausdrücklicher Flash-Freigabe wird derselbe lokale Ablauf mit
+den Sicherheitsparametern gestartet:
 
 ```bash
-python3 - <<'PY'
-import hashlib
-import json
-from pathlib import Path
-
-manifest = json.loads(Path("manifest.json").read_text(encoding="utf-8"))
-ota = Path(manifest["builds"][0]["ota"]["path"])
-expected = manifest["builds"][0]["ota"]["sha256"]
-actual = hashlib.sha256(ota.read_bytes()).hexdigest()
-print(f"Datei:    {ota}")
-print(f"Erwartet: {expected}")
-print(f"Geladen:  {actual}")
-if actual != expected:
-    raise SystemExit("FEHLER: OTA-Prüfsumme stimmt nicht")
-print("OTA-Prüfsumme: OK")
-PY
+cd /home/nanobot/home-assistant-voice-pe
+python3 scripts/deploy_firmware_release.py vX.Y.Z \
+  --flash \
+  --device 192.168.4.REPLACE_ME \
+  --rollback-ota /pfad/zur/bekannt-guten-firmware.ota.bin \
+  --flash-confirmation FLASH-KITCHEN-VOICE-PE
 ```
 
-Die konkrete Prüfsumme ist releasegebunden und wird deshalb nicht aus älterer
-Dokumentation übernommen. Maßgeblich sind ausschließlich `SHA256SUMS.txt` und
-das `manifest.json` desselben Releases.
+Das Script kopiert das Rollback-Image in das lokale Build-Verzeichnis, bevor es
+`esphome upload` aufruft. Geräteadresse und Rollback-Datei dürfen nicht geraten
+werden. Geheimnisse oder OTA-Passwörter werden nicht in das Repository
+geschrieben.
 
-## 4. ESPHome CLI in einer isolierten Umgebung installieren
+## 4. Physische Verifikation
 
-Die Firmware wurde mit ESPHome `2026.10.0` gebaut; dieselbe CLI-Version für den
-Upload verwenden:
+Nach dem Neustart mindestens prüfen:
 
-```bash
-python3 -m venv "$HOME/.venvs/esphome-2026.10.0"
-source "$HOME/.venvs/esphome-2026.10.0/bin/activate"
-python -m pip install --upgrade pip
-python -m pip install "esphome==2026.10.0"
-esphome version
-```
+1. Das Voice PE ist in ESPHome und Home Assistant wieder online.
+2. Firmware und laufende Bridge melden dasselbe Versionspaar.
+3. Wake Word und erster Turn funktionieren.
+4. Lokaler Remote-ACK und finale TTS werden vollständig abgespielt.
+5. Ein Folgeturn funktioniert ohne neues Wake Word.
+6. Exit-Phrasen, Leerlauf-Timeout, mittlere Taste und Mute beenden die Session
+   wie in `docs/dialogmodus.md` beschrieben.
+7. LED-Zustände und Diagnosesensoren entsprechen dem Release.
+8. Es treten keine unerwarteten Reboots, Audioabbrüche oder Endlossessions auf.
 
-Erwartet wird:
+Die ESPHome-Weboberfläche behält ihre eigene YAML. Ein späteres
+`Install -> Wirelessly` aus dem Device Builder kann die Custom Firmware mit dem
+dort gespeicherten Stand überschreiben.
 
-```text
-Version: 2026.10.0
-```
+## 5. Rollback und Recovery
 
-## 5. Erreichbarkeit prüfen
+### Gerät ist per OTA erreichbar
 
-Die ESPHome-OTA-Verbindung verwendet üblicherweise TCP-Port `3232`:
-
-```bash
-python3 - "$VOICE_PE_IP" <<'PY'
-import socket
-import sys
-
-host = sys.argv[1]
-with socket.create_connection((host, 3232), timeout=5):
-    print(f"ESPHome OTA erreichbar: {host}:3232")
-PY
-```
-
-Schlägt dies fehl, vor dem Flash Netzwerk, IP-Adresse, VLAN-/Firewall-Regeln und
-Gerätestatus prüfen. Nicht auf Verdacht mit `factory.bin` fortfahren.
-
-## 6. Vorkompilierte OTA-Firmware hochladen
-
-```bash
-cd "$FIRMWARE_DIR"
-source "$HOME/.venvs/esphome-2026.10.0/bin/activate"
-
-esphome upload "$FIRMWARE_REPO/home-assistant-voice.yaml" \
-  --device "$VOICE_PE_IP" \
-  --file "$FIRMWARE_DIR/home-assistant-voice-esp32s3.ota.bin" \
-  --ota-platform esphome
-```
-
-Falls die bestehende Firmware entgegen der aktuellen Konfiguration ein
-OTA-Passwort verlangt, dieses nur über eine Umgebungsvariable übergeben und nie
-committen:
-
-```bash
-esphome upload "$FIRMWARE_REPO/home-assistant-voice.yaml" \
-  --device "$VOICE_PE_IP" \
-  --file "$FIRMWARE_DIR/home-assistant-voice-esp32s3.ota.bin" \
-  --ota-platform esphome \
-  --password "$ESPHOME_OTA_PASSWORD"
-```
-
-Der normale Open-Mic-Build definiert kein festes OTA-Passwort. Die zweite
-Variante ist nur für ein bereits entsprechend geschütztes Gerät gedacht.
-
-## 7. Neustart und Verifikation
-
-Nach erfolgreichem Upload startet das Voice PE automatisch neu. Ein bis zwei
-Minuten warten und dann prüfen:
-
-1. Das bestehende Gerät wird in ESPHome Device Builder wieder online. Der
-   CLI-Upload löscht dessen dort gespeicherte YAML nicht.
-2. Home Assistant verbindet sich wieder mit demselben ESPHome-Gerät.
-3. Folgende neue Entities beziehungsweise Funktionen sind vorhanden:
-   - `Open dialog mode`;
-   - `Dialog session active`;
-   - `Dialog state`;
-   - ESPHome-Aktion mit dem Suffix `_dialog_remote_ack`.
-4. Die HA Voice Bridge meldet Version `1.4.1` für Integration, Manifest,
-   Channel-Datei und laufenden Channel.
-5. Hardwaretest in dieser Reihenfolge:
-   - Wake Word;
-   - grüner Aktivierungsring, violettes Warten/Zuhören und langsame Amber-Verarbeitung;
-   - langsame Remote-Frage, genau ein lokales „Einen Moment.“ ohne LED-Wechsel;
-   - vollständige finale Antwort;
-   - schnellerer Amber-Puls während der Antwort und violettes Warten danach;
-   - Folgeturn ohne neues Wake Word;
-   - 20 Sekunden ohne Sprachbeginn beenden die wartende Session mit einem orangefarbenen Impuls;
-   - lokaler HA-Befehl im Folgeturn;
-   - `Stop` beendet die Session mit einem orangefarbenen Impuls; Fehler blinken rot.
-   - WLAN-RSSI-Diagnosesensor prüfen.
-
-Wichtig: Die ESPHome-Weboberfläche behält ihre bisherige YAML. Ein späteres
-`Install -> Wirelessly` aus dieser Oberfläche kompiliert genau diese dort
-hinterlegte YAML und kann die Open-Mic-Firmware wieder überschreiben. Entweder
-die Dashboard-Konfiguration auf den Open-Mic-Stand bringen oder weitere
-vorkompilierte Updates wieder mit `esphome upload --file` durchführen.
-
-## 8. Fehler und Rollback
-
-### Gerät ist weiterhin per OTA erreichbar
-
-Eine bekannte funktionierende `*.ota.bin` kann mit demselben
-`esphome upload ... --file ... --ota-platform esphome`-Befehl zurückgespielt
-werden.
+Das vor dem Flash gesicherte bekannte gute `.ota.bin` mit ESPHome OTA
+zurückspielen. Firmware und Bridge als Paar zurückrollen und danach erneut
+physisch prüfen.
 
 ### Gerät ist nicht mehr per OTA erreichbar
 
-USB-Recovery mit dem offiziellen ESPHome-Webinstaller durchführen:
+USB-Recovery über den offiziellen ESPHome-Webinstaller:
 
 ```text
 https://esphome.github.io/home-assistant-voice-pe/
 ```
 
-Dafür das offizielle Factory-Image beziehungsweise den Webinstaller verwenden.
-Ein USB-Recovery kann eine erneute Einrichtung oder Adoption erfordern.
+Dafür ausschließlich ein passendes Factory-Image beziehungsweise den
+offiziellen Webinstaller verwenden. Ein USB-Recovery kann eine erneute
+Einrichtung oder Adoption erfordern.
 
 ### Bridge zurückrollen
 
-Das beim Bridge-Deployment genannte Backup verwenden:
+Das beim Bridge-Deployment erzeugte Backup verwenden:
 
 ```bash
 python3 /home/nanobot/NanoBotSkills/scripts/deploy_ha_voice_release.py \
   --rollback /home/nanobot/.nanobot/backups/ha-voice/<BACKUP>
 sudo systemctl restart nanobot
 ```
-
-Firmware und Bridge als gekoppeltes Paar bewerten und bei einem inkompatiblen
-Stand gemeinsam zurückrollen.
