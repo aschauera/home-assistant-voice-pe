@@ -1,6 +1,6 @@
 # Release-Pairing: Voice-PE-Firmware und HA Voice Bridge
 
-Die Open-Mic-Funktion besteht aus Firmware und Bridge. Beide Komponenten werden getrennt veröffentlicht, aber als ausdrücklich kompatibles Paar betrieben. Für alle künftigen Paare gilt: Beide Seiten haben dieselbe SemVer und denselben `v`-Tag. Die Firmware-Projektversion lautet beispielsweise `1.4.2`, während Firmware und Bridge beide unter dem GitHub-Tag `v1.4.2` veröffentlicht werden.
+Die Open-Mic-Funktion besteht aus Firmware und Bridge. Beide Komponenten werden getrennt veröffentlicht, aber als ausdrücklich kompatibles Paar betrieben. Für alle künftigen Paare gilt: Beide Seiten haben dieselbe SemVer und denselben `v`-Tag. Die Firmware-Projektversion lautet beispielsweise `1.4.3`, während Firmware und Bridge beide unter dem GitHub-Tag `v1.4.3` veröffentlicht werden.
 
 ## Letztes historisches Release-Paar
 
@@ -16,10 +16,10 @@ bleibt unverändert. Die identische Versionsregel gilt ab dem nächsten Paar.
 
 | Komponente | Default-Branch | Release |
 |---|---|---|
-| Voice-PE-Firmware | `dev` | [`v1.4.2`](https://github.com/aschauera/home-assistant-voice-pe/releases/tag/v1.4.2) |
-| HA Voice Bridge | `main` | [`v1.4.2`](https://github.com/aschauera/NanoBotSkills/releases/tag/v1.4.2) |
+| Voice-PE-Firmware | `dev` | [`v1.4.3`](https://github.com/aschauera/home-assistant-voice-pe/releases/tag/v1.4.3) |
+| HA Voice Bridge | `main` | [`v1.4.3`](https://github.com/aschauera/NanoBotSkills/releases/tag/v1.4.3) |
 
-Beide Komponenten verwenden Version `1.4.2` und denselben Tag `v1.4.2`.
+Beide Komponenten verwenden Version `1.4.3` und denselben Tag `v1.4.3`.
 Da der neue LED-, Timeout-, Audio- und Fast-Path-Stack noch nicht gemeinsam auf
 der produktiven Kitchen Voice PE hardwarevalidiert wurde, bleiben beide
 Veröffentlichungen zunächst Pre-Releases.
@@ -39,7 +39,7 @@ Ein Verweis auf einen Branch oder auf `latest` reicht nicht, weil diese Ziele ve
 1. Kompatible Bridge-Version prüfen:
 
    ```bash
-   gh release view v1.4.2 \
+   gh release view v1.4.3 \
      --repo aschauera/NanoBotSkills \
      --json tagName,isPrerelease,targetCommitish,url
    ```
@@ -53,7 +53,7 @@ Ein Verweis auf einen Branch oder auf `latest` reicht nicht, weil diese Ziele ve
    `scripts/deploy_firmware_release.py <TAG>` lokal auf dem Nanobot-Pi prüfen und
    mit der im Release festgelegten ESPHome-Version kompilieren.
 5. Release-Notes müssen mindestens enthalten:
-   - Firmware-SemVer `1.4.2`, gemeinsamer Tag `v1.4.2` und Commit;
+   - Firmware-SemVer `1.4.3`, gemeinsamer Tag `v1.4.3` und Commit;
    - direkten Link zur kompatiblen Bridge-Version;
    - Status von Source-Tests und lokalem Build;
    - Prüfsumme des lokal erzeugten OTA-Images;
@@ -73,7 +73,7 @@ Vor Veröffentlichung muss im Bridge-Repository die neueste kompatible Firmware 
 
 ```bash
 gh release list --repo aschauera/home-assistant-voice-pe --limit 20
-gh release view v1.4.2 \
+gh release view v1.4.3 \
   --repo aschauera/home-assistant-voice-pe \
   --json tagName,isPrerelease,targetCommitish,url
 ```

@@ -38,7 +38,7 @@ class CustomFirmwareContractTest(unittest.TestCase):
                     "python3",
                     str(ROOT / "scripts/package_firmware_release.py"),
                     "--tag",
-                    "v1.4.2",
+                    "v1.4.3",
                     "--commit",
                     "0" * 40,
                     "--output",
@@ -52,7 +52,7 @@ class CustomFirmwareContractTest(unittest.TestCase):
                 (output / "firmware-release.json").read_text(encoding="utf-8")
             )
             self.assertEqual("2026.10.0", metadata["esphome_version"])
-            self.assertEqual("v1.4.2", metadata["tag"])
+            self.assertEqual("v1.4.3", metadata["tag"])
             for name in (
                 "home-assistant-voice.yaml",
                 "home-assistant-voice.factory.yaml",
@@ -194,10 +194,10 @@ class CustomFirmwareContractTest(unittest.TestCase):
         self.assertIn("entity_category: diagnostic", CONFIG)
         self.assertIn("buffer_duration: 300ms", CONFIG)
         for name in ("home-assistant-voice.factory.yaml", "home-assistant-voice.8mb.yaml"):
-            self.assertIn("version: 1.4.2", (ROOT / name).read_text(encoding="utf-8"))
+            self.assertIn("version: 1.4.3", (ROOT / name).read_text(encoding="utf-8"))
         for name in ("AGENTS.md", "README.md", "docs/release-pairing.md", "docs/ota-flashing.md"):
-            self.assertIn("1.4.2", (ROOT / name).read_text(encoding="utf-8"))
-            self.assertIn("v1.4.2", (ROOT / name).read_text(encoding="utf-8"))
+            self.assertIn("1.4.3", (ROOT / name).read_text(encoding="utf-8"))
+            self.assertIn("v1.4.3", (ROOT / name).read_text(encoding="utf-8"))
 
     def test_dialog_led_and_diagnostic_states_are_documented(self) -> None:
         for state in (
