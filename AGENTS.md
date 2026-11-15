@@ -18,11 +18,11 @@ Wichtige Regeln:
   Bridge direkt verlinken. Umgekehrt muss jedes neue Bridge-Release die letzte
   kompatible Firmware-Version direkt verlinken.
 - Firmware und HA Voice Bridge verwenden künftig stets dieselbe SemVer und
-  denselben `v`-Tag als fest gekoppeltes Paar: Firmware-Projektversion `1.4.2`
-  und Git-Tag `v1.4.2` gehören zur Bridge-Version `1.4.2` mit Tag `v1.4.2`.
+  denselben `v`-Tag als fest gekoppeltes Paar: Firmware-Projektversion `1.4.3`
+  und Git-Tag `v1.4.3` gehören zur Bridge-Version `1.4.3` mit Tag `v1.4.3`.
   Historische Paare wie Firmware `0.2.1` mit Bridge `v1.4.1` bleiben unverändert.
-- Das aktuelle gekoppelte Pre-Release ist Firmware `1.4.2` mit Tag `v1.4.2`
-  zusammen mit HA Voice Bridge `1.4.2` unter demselben Tag. Bis zur gemeinsamen
+- Das aktuelle gekoppelte Pre-Release ist Firmware `1.4.3` mit Tag `v1.4.3`
+  zusammen mit HA Voice Bridge `1.4.3` unter demselben Tag. Bis zur gemeinsamen
   Hardwarevalidierung bleiben beide Veröffentlichungen Pre-Releases.
 - Gibt es noch kein gemeinsam validiertes stabiles Paar, beide Seiten nur als
   Draft oder Pre-Release kennzeichnen.

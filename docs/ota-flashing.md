@@ -6,9 +6,9 @@ Quellen und Sounds, Metadaten sowie SHA-256-Prüfsummen. Nanobot lädt dieses
 unveränderliche Paket auf den lokalen Host, prüft es und kompiliert es dort mit
 der exakt festgelegten ESPHome-Version.
 
-Das historische Release `v1.4.2` enthält noch vorkompilierte Binaries. Die hier
-beschriebene Source-only-Pipeline gilt für alle Releases, die mit dem Workflow
-`Publish firmware sources` veröffentlicht werden.
+Das historische Release `v1.4.2` enthält noch vorkompilierte Binaries. Das
+aktuelle gekoppelte Pre-Release `v1.4.3` nutzt erstmals ausschließlich die hier
+beschriebene Source-only-Pipeline mit dem Workflow `Publish firmware sources`.
 
 ## Sicherheitsgrenzen
 

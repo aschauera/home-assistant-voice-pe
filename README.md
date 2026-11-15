@@ -6,7 +6,7 @@ The upstream project remains available at
 [`esphome/home-assistant-voice-pe`](https://github.com/esphome/home-assistant-voice-pe).
 
 > [!IMPORTANT]
-> Das aktuelle gekoppelte Pre-Release ist Firmware [`v1.4.2`](https://github.com/aschauera/home-assistant-voice-pe/releases/tag/v1.4.2) zusammen mit HA Voice Bridge [`v1.4.2`](https://github.com/aschauera/NanoBotSkills/releases/tag/v1.4.2). Beide verwenden dieselbe SemVer und denselben `v`-Tag. Bis zur gemeinsamen Hardwarevalidierung bleiben beide Pre-Releases; historische Releases wie Firmware `0.2.1` und Bridge `v1.4.1` bleiben unverändert.
+> Das aktuelle gekoppelte Pre-Release ist Firmware [`v1.4.3`](https://github.com/aschauera/home-assistant-voice-pe/releases/tag/v1.4.3) zusammen mit HA Voice Bridge [`v1.4.3`](https://github.com/aschauera/NanoBotSkills/releases/tag/v1.4.3). Beide verwenden dieselbe SemVer und denselben `v`-Tag. Bis zur gemeinsamen Hardwarevalidierung bleiben beide Pre-Releases; historische Releases wie Firmware `0.2.1` und Bridge `v1.4.1` bleiben unverändert.
 
 ## Offener Dialogmodus
 
