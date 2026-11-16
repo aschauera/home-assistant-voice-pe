@@ -15,20 +15,29 @@ DOC = (ROOT / "docs/dialogmodus.md").read_text(encoding="utf-8")
 
 
 class CustomFirmwareContractTest(unittest.TestCase):
-    def test_esphome_version_is_pinned_without_cloud_compilation(self) -> None:
+    def test_release_only_standard_firmware_build_is_pinned(self) -> None:
         self.assertIn("min_version: 2026.10.0", CONFIG)
         self.assertFalse((ROOT / ".github/workflows/build.yml").exists())
-        workflows = "\n".join(
-            path.read_text(encoding="utf-8")
-            for path in (ROOT / ".github/workflows").glob("*.yml")
+        workflow = (ROOT / ".github/workflows/release-sources.yml").read_text(
+            encoding="utf-8"
         )
-        for forbidden in (
-            "esphome compile",
-            "esphome run",
-            "esphome upload",
-            "esphome/workflows",
-        ):
-            self.assertNotIn(forbidden, workflows)
+        self.assertIn("release:\n    types: [published]", workflow)
+        self.assertNotIn("workflow_dispatch:", workflow)
+        self.assertNotIn("pull_request:", workflow)
+        self.assertNotIn("push:", workflow)
+        self.assertIn("files: home-assistant-voice.factory.yaml", workflow)
+        self.assertNotIn("files: |", workflow)
+        self.assertNotIn("home-assistant-voice.8mb.yaml", workflow)
+        self.assertIn(
+            "esphome-version: ${{ needs.package-sources.outputs.esphome-version }}",
+            workflow,
+        )
+        self.assertIn('test "$commit" = "$GITHUB_SHA"', workflow)
+        self.assertIn("contents: write", workflow)
+        self.assertEqual(1, workflow.count("contents: write"))
+        self.assertNotIn("--clobber", workflow)
+        self.assertIn("esphome/workflows/.github/workflows/build.yml@", workflow)
+        self.assertNotIn("esphome upload", workflow)
 
     def test_release_packager_emits_yaml_source_bundle_and_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -56,10 +65,10 @@ class CustomFirmwareContractTest(unittest.TestCase):
             for name in (
                 "home-assistant-voice.yaml",
                 "home-assistant-voice.factory.yaml",
-                "home-assistant-voice.8mb.yaml",
                 "SHA256SUMS.txt",
             ):
                 self.assertTrue((output / name).is_file(), name)
+            self.assertFalse((output / "home-assistant-voice.8mb.yaml").exists())
             archive = output / metadata["source_archive"]
             with tarfile.open(archive, "r:gz") as bundle:
                 members = set(bundle.getnames())
@@ -234,11 +243,13 @@ class CustomFirmwareContractTest(unittest.TestCase):
             'parser.add_argument("--flash", action="store_true"',
             'parser.add_argument("--device"',
             '"--rollback-ota"',
-            '"compile"',
             '"upload"',
             '"--ota-platform"',
+            '"standard-16mb"',
         ):
             self.assertIn(expected, deployment)
+        self.assertNotIn('"compile"', deployment)
+        self.assertNotIn('"--variant"', deployment)
 
     def test_remote_ack_is_local_and_guarded(self) -> None:
         sound = ROOT / "sounds/remote_ack_einen_moment.mp3"

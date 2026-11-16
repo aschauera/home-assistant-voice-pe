@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parents[1]
 DIRECT_ASSETS = (
     "home-assistant-voice.yaml",
     "home-assistant-voice.factory.yaml",
-    "home-assistant-voice.8mb.yaml",
 )
 SOURCE_PATHS = DIRECT_ASSETS + (
     "custom_components",
@@ -105,10 +104,7 @@ def main() -> None:
                 "commit": args.commit,
                 "project_version": project_version,
                 "esphome_version": esphome_version,
-                "entrypoints": {
-                    "standard": "home-assistant-voice.factory.yaml",
-                    "8mb": "home-assistant-voice.8mb.yaml",
-                },
+                "entrypoint": "home-assistant-voice.factory.yaml",
                 "source_archive": archive.name,
             },
             indent=2,
