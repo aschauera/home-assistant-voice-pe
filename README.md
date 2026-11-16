@@ -82,22 +82,28 @@ The exact entity ID is assigned by Home Assistant and may differ.
 
 ## Bauen und installieren
 
-GitHub kompiliert diese Firmware bewusst **nicht**. Pull Requests und Pushes auf
-`dev` führen nur striktes YAML-Lint und die Contract-/Unit-Tests aus. Auch die
-Release-Automation erzeugt keine Binaries: Sie hängt die drei versionierten
-YAML-Dateien, ein vollständiges Source-Paket, Build-Metadaten und
-SHA-256-Prüfsummen an das GitHub-Release.
+Pull Requests und Pushes auf `dev` führen nur striktes YAML-Lint und die
+Contract-/Unit-Tests aus. Firmware wird ausschließlich beim Veröffentlichen
+eines GitHub-Releases kompiliert. Der gepinnte offizielle ESPHome-Workflow baut
+pro Release genau eine Variante: `home-assistant-voice.factory.yaml` für das
+normale 16-MB Voice Preview Edition. Die 8-MB-Variante wird weder kompiliert
+noch als Release-Artefakt veröffentlicht.
 
-Nanobot lädt ein unveränderliches Release lokal herunter, verifiziert Tag,
-Commit und Prüfsummen und kompiliert es mit der im Release festgelegten
-ESPHome-Version. Ohne `--flash` endet der Ablauf nach dem lokalen Build:
+Der Release-Workflow hängt das OTA-Image, das Factory-Image, die beiden
+versionierten Standard-YAML-Dateien, das vollständige Source-Paket,
+Build-Metadaten und gemeinsame SHA-256-Prüfsummen an das Release. Er flasht kein
+Gerät.
+
+Nanobot lädt das unveränderliche Release nur noch herunter und verifiziert Tag,
+Commit, vollständigen Asset-Satz und Prüfsummen. Eine lokale Kompilierung auf
+dem Pi findet nicht mehr statt:
 
 ```bash
 cd /home/nanobot/home-assistant-voice-pe
 python3 scripts/deploy_firmware_release.py vX.Y.Z
 ```
 
-Ein OTA-Flash ist ein eigener, ausdrücklich freizugebender Schritt. Das Script
+Ein OTA-Flash ist ein separater, ausdrücklich freizugebender Schritt. Das Script
 verlangt dafür die Geräteadresse, ein vorhandenes bekannt gutes Rollback-Image
 und die exakte Flash-Bestätigung. Das einzige produktive Kitchen Voice PE wird
 niemals allein aufgrund eines Builds oder Releases geflasht.
@@ -107,7 +113,7 @@ Die vollständige Anleitung steht unter
 Firmware- und Bridge-Releases steht unter
 [`docs/release-pairing.md`](docs/release-pairing.md).
 
-Für OTA wird ausschließlich das lokal erzeugte `.ota.bin` verwendet.
+Für OTA wird ausschließlich das verifizierte `.ota.bin` des Releases verwendet.
 `.factory.bin` ist nur für USB-Installation oder Recovery bestimmt. Der
 offizielle Webinstaller bleibt der letzte Recovery-Pfad:
 

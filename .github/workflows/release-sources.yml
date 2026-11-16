@@ -1,29 +1,26 @@
-name: Publish firmware sources
+name: Build and publish firmware release
 
 on:
   release:
     types: [published]
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Existing release tag to repair, for example v1.4.3
-        required: true
-        type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: release-sources-${{ github.event.release.tag_name || inputs.tag }}
+  group: firmware-release-${{ github.event.release.tag_name }}
   cancel-in-progress: false
 
 jobs:
-  publish-sources:
-    name: Attach YAML and immutable source bundle
+  package-sources:
+    name: Validate and package immutable sources
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      commit: ${{ steps.release.outputs.commit }}
+      esphome-version: ${{ steps.metadata.outputs.esphome-version }}
     env:
-      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Resolve release commit
@@ -37,12 +34,16 @@ jobs:
             commit="$(gh api "repos/$GH_REPO/git/tags/$commit" --jq '.object.sha')"
           fi
           test "${#commit}" -eq 40
+          test "$commit" = "$GITHUB_SHA"
           printf 'commit=%s\n' "$commit" >> "$GITHUB_OUTPUT"
 
-      - name: Check out exact release tag
+      - name: Check out exact release commit
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
         with:
-          ref: ${{ env.RELEASE_TAG }}
+          ref: ${{ steps.release.outputs.commit }}
+
+      - name: Verify checked-out commit
+        run: test "$(git rev-parse HEAD)" = "${{ steps.release.outputs.commit }}"
 
       - name: Run source contract tests
         run: python3 -m unittest discover -s tests -v
@@ -52,9 +53,115 @@ jobs:
           python3 scripts/package_firmware_release.py \
             --tag "$RELEASE_TAG" \
             --commit "${{ steps.release.outputs.commit }}" \
-            --output dist/release
+            --output dist/sources
 
-      - name: Upload source assets to release
+      - name: Read authoritative ESPHome version
+        id: metadata
+        run: |
+          version="$(python3 -c 'import json; print(json.load(open("dist/sources/firmware-release.json"))["esphome_version"])')"
+          test -n "$version"
+          printf 'esphome-version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
+      - name: Upload packaged sources for publication
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: release-sources
+          path: dist/sources
+          if-no-files-found: error
+
+  build-standard-firmware:
+    name: Compile standard 16 MB firmware
+    needs: package-sources
+    permissions:
+      contents: read
+    uses: esphome/workflows/.github/workflows/build.yml@025a1e6255610c498ed590403b7e510b69e474df  # 2026.4.1
+    with:
+      files: home-assistant-voice.factory.yaml
+      esphome-version: ${{ needs.package-sources.outputs.esphome-version }}
+      release-version: ${{ github.event.release.tag_name }}
+      release-url: ${{ github.event.release.html_url }}
+      combined-name: release-firmware-standard
+
+  publish-assets:
+    name: Verify and attach release assets
+    needs: [package-sources, build-standard-firmware]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out exact release commit
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          ref: ${{ needs.package-sources.outputs.commit }}
+
+      - name: Verify checked-out commit and immutable tag
         env:
           GH_REPO: ${{ github.repository }}
-        run: gh release upload "$RELEASE_TAG" dist/release/* --repo "$GH_REPO" --clobber
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ needs.package-sources.outputs.commit }}"
+          current="$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')"
+          object_type="$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.type')"
+          if [ "$object_type" = "tag" ]; then
+            current="$(gh api "repos/$GH_REPO/git/tags/$current" --jq '.object.sha')"
+          fi
+          test "$current" = "${{ needs.package-sources.outputs.commit }}"
+
+      - name: Download packaged sources
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: release-sources
+          path: dist/sources
+
+      - name: Download standard firmware
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        with:
+          name: release-firmware-standard
+          path: dist/build
+
+      - name: Assemble and checksum release assets
+        run: |
+          python3 scripts/assemble_firmware_release.py \
+            --tag "$RELEASE_TAG" \
+            --commit "${{ needs.package-sources.outputs.commit }}" \
+            --sources dist/sources \
+            --build dist/build \
+            --output dist/release
+
+      - name: Require an empty or identical immutable asset set
+        id: assets
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: |
+          find dist/release -maxdepth 1 -type f -printf '%f\n' | sort > expected-assets.txt
+          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" \
+            --jq '.assets[].name' | sort > existing-assets.txt
+          if [ ! -s existing-assets.txt ]; then
+            printf 'upload=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          diff -u expected-assets.txt existing-assets.txt
+          mkdir -p dist/existing
+          gh release download "$RELEASE_TAG" --repo "$GH_REPO" --dir dist/existing
+          while IFS= read -r name; do
+            cmp "dist/release/$name" "dist/existing/$name"
+          done < expected-assets.txt
+          printf 'upload=false\n' >> "$GITHUB_OUTPUT"
+
+      - name: Upload verified assets to release
+        if: steps.assets.outputs.upload == 'true'
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "$RELEASE_TAG" dist/release/* --repo "$GH_REPO"
+
+      - name: Verify final remote asset set
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: |
+          find dist/release -maxdepth 1 -type f -printf '%f\n' | sort > expected-assets.txt
+          gh api "repos/$GH_REPO/releases/tags/$RELEASE_TAG" \
+            --jq '.assets[].name' | sort > actual-assets.txt
+          diff -u expected-assets.txt actual-assets.txt

@@ -170,15 +170,17 @@ Die Herkunft und der genaue Commit sind in
 
 ## Build und Rollback
 
-CI führt ausschließlich YAML-Lint und Contract-/Unit-Tests aus. Releases
-enthalten die versionierten YAML- und Source-Dateien, aber keine kompilierten
-Firmware-Binaries. Nanobot prüft und kompiliert die Standard- oder
-Acht-Megabyte-Variante lokal mit der im Release festgelegten ESPHome-Version.
+Push- und Pull-Request-CI führt ausschließlich YAML-Lint und Contract-/Unit-
+Tests aus. Erst `release.published` kompiliert mit dem gepinnten offiziellen
+ESPHome-Workflow genau die Standardvariante für das 16-MB-Gerät. Das Release
+enthält das verifizierte OTA-/Factory-Paar, die Standard-YAML- und Source-
+Dateien, Metadaten und gemeinsame SHA-256-Prüfsummen. Nanobot prüft diese
+Artefakte lokal, kompiliert aber nicht.
 
 Die Custom Firmware deaktiviert weiterhin den offiziellen HTTP-Updater. OTA
-über ESPHome und USB bleiben erhalten. Vor einem Flash müssen der lokale Build,
-ein bekannt gutes OTA-Rollback-Image und der offizielle USB-Recovery-Pfad
-geprüft sein.
+über ESPHome und USB bleiben erhalten. Vor einem Flash müssen der erfolgreiche
+Release-Build und Asset-Check, ein bekannt gutes OTA-Rollback-Image und der
+offizielle USB-Recovery-Pfad geprüft sein.
 
 Der Timeout-Ton und die STT-Normalisierung sind mit Contract-Tests geprüft,
 aber noch **nicht hardwarevalidiert**. Zu prüfen sind insbesondere die
