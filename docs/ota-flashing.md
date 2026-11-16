@@ -1,29 +1,32 @@
-# Firmware lokal bauen und kontrolliert per OTA installieren
+# GitHub-Release prüfen und kontrolliert per OTA installieren
 
-GitHub Actions kompiliert in diesem Repository keine Firmware. Ein Release
-enthält ausschließlich die versionierten YAML-Dateien, die benötigten lokalen
-Quellen und Sounds, Metadaten sowie SHA-256-Prüfsummen. Nanobot lädt dieses
-unveränderliche Paket auf den lokalen Host, prüft es und kompiliert es dort mit
-der exakt festgelegten ESPHome-Version.
+Firmware wird in diesem Repository nicht mehr auf dem Nanobot-Pi kompiliert.
+Pull Requests und Pushes validieren nur Quellen. Erst ein veröffentlichtes
+GitHub-Release startet den Workflow `Build and publish firmware release`.
+Dieser verwendet den gepinnten offiziellen ESPHome-Workflow und baut genau eine
+Firmwarevariante: `home-assistant-voice.factory.yaml` für das normale 16-MB
+Home Assistant Voice Preview Edition.
 
-Das historische Release `v1.4.2` enthält noch vorkompilierte Binaries. Das
-aktuelle gekoppelte Pre-Release `v1.4.3` nutzt erstmals ausschließlich die hier
-beschriebene Source-only-Pipeline mit dem Workflow `Publish firmware sources`.
+Das historische Pre-Release `v1.4.3` war ein Source-only-Release und enthält
+keine von diesem Ablauf erwarteten Binärartefakte. Der hier beschriebene Ablauf
+gilt für nachfolgende Releases mit Metadatenschema 2.
 
 ## Sicherheitsgrenzen
 
 - Firmware und HA Voice Bridge müssen dieselbe SemVer und denselben `v`-Tag
   verwenden.
-- GitHub Copilot und GitHub Actions dürfen weder kompilieren noch flashen.
-- Ein erfolgreicher lokaler Build ist **keine** Flash-Freigabe.
+- GitHub Actions kompiliert ausschließlich beim Ereignis `release.published`.
+  Pushes, Pull Requests und manuelle Workflow-Aufrufe kompilieren nicht.
+- Pro Release wird nur die Standardvariante für das 16-MB-Gerät gebaut. Die
+  8-MB-Variante wird weder kompiliert noch veröffentlicht.
+- GitHub Actions und Copilot dürfen niemals ein Gerät flashen.
+- Ein erfolgreicher Release-Build oder Download ist **keine** Flash-Freigabe.
 - Das produktive Kitchen Voice PE darf nur nach ausdrücklicher Freigabe durch
   Aschi geflasht werden.
 - Vor jedem Flash muss ein bekannt gutes OTA-Rollback-Image lokal vorhanden
   sein.
-- Für Netzwerk-OTA ausschließlich das lokal erzeugte `.ota.bin` verwenden.
-- `.factory.bin` ist ausschließlich für USB-Installation oder Recovery.
-- Die Acht-Megabyte-Variante nur für nachweislich passende Hardware verwenden;
-  das normale Voice Preview Edition verwendet die Standardvariante.
+- Für Netzwerk-OTA ausschließlich das verifizierte `.ota.bin` verwenden.
+  `.factory.bin` ist ausschließlich für USB-Installation oder Recovery.
 - Während Upload und Neustart Strom und Netzwerk nicht unterbrechen.
 
 ## Hardwarevalidierung und Rollback für den Dialog-Timeout
@@ -36,38 +39,102 @@ sind ein nicht unterstütztes Audioformat, ein zu leiser Ton, abgeschnittene
 Wiedergabe oder eine Verzögerung im lokalen Player; die Session muss auch bei
 Audiofehlern zuverlässig in `sleeping` wechseln.
 
-Bei Fehlern nach ausdrücklicher Flash-Freigabe das vor dem Update gesicherte
-OTA-Image einspielen und Firmware sowie HA Voice Bridge gemeinsam auf das
-vorherige bekannte gute Versionspaar zurücksetzen. Ist OTA nicht verfügbar,
-den offiziellen USB-Recovery-Pfad aus Abschnitt 5 verwenden. Das
-Produktionsgerät in der Küche darf ohne ausdrückliche Freigabe nicht geflasht
-werden.
+Bei Fehlern nach ausdrücklicher Flash-Freigabe das bekannte gute OTA-Image
+einspielen und Firmware sowie HA Voice Bridge gemeinsam auf das vorherige
+Versionspaar zurücksetzen. Ist OTA nicht verfügbar, den offiziellen
+USB-Recovery-Pfad verwenden.
 
-## Inhalt eines Source-only-Releases
+## Inhalt eines Release-Builds
 
-Die Release-Automation veröffentlicht mindestens:
+Die Release-Automation veröffentlicht gemeinsam:
 
 - `home-assistant-voice.yaml`;
 - `home-assistant-voice.factory.yaml`;
-- `home-assistant-voice.8mb.yaml`;
 - `home-assistant-voice-source-vX.Y.Z.tar.gz` mit lokalen Komponenten und Sounds;
-- `firmware-release.json` mit Tag, Commit, ESPHome-Version und Entrypoints;
-- `SHA256SUMS.txt`.
+- `home-assistant-voice-standard-vX.Y.Z.ota.bin` für Netzwerk-OTA;
+- `home-assistant-voice-standard-vX.Y.Z.factory.bin` für USB/Recovery;
+- `firmware-release.json` mit Tag, Commit, ESPHome-Version, Standard-Entrypoint
+  und SHA-256 der beiden Firmware-Images;
+- `SHA256SUMS.txt` für den vollständigen veröffentlichten Asset-Satz.
 
-Es werden ausdrücklich keine Firmware-Binaries in GitHub Actions erzeugt.
+`home-assistant-voice.8mb.yaml` bleibt gegebenenfalls als Entwicklungsquelle im
+Repository, ist aber kein Release-Entrypoint oder Release-Asset.
 
-## Voraussetzungen auf dem Nanobot-Pi
+## 1. Release veröffentlichen und Workflow abwarten
+
+Die Projektversion im Standard-Entrypoint muss zum Release-Tag passen. Nach dem
+Veröffentlichen des Releases startet automatisch der einzige Firmware-Build.
+Vor der lokalen Bereitstellung muss der Workflow vollständig erfolgreich sein.
+Ein frisch veröffentlichtes Release kann bis dahin vorübergehend noch keine
+Firmware-Assets enthalten.
+
+Der Workflow führt aus:
+
+1. exakten Release-Tag und Commit auflösen;
+2. Contract-/Unit-Tests ausführen und unveränderliche Quellen paketieren;
+3. mit dem gepinnten offiziellen ESPHome-Workflow ausschließlich
+   `home-assistant-voice.factory.yaml` kompilieren;
+4. genau ein OTA-/Factory-Paar akzeptieren;
+5. Metadaten und gemeinsame SHA-256-Prüfsummen erzeugen;
+6. alle verifizierten Assets an dasselbe GitHub-Release hängen;
+7. den endgültigen Asset-Namenssatz gegen die lokal erzeugte Liste prüfen.
+
+Es gibt bewusst keinen `workflow_dispatch`-Build und keinen zweiten
+8-MB-Build. Bei einer erneuten Ausführung akzeptiert der Workflow vorhandene
+Assets nur, wenn Namen und Inhalte vollständig identisch sind. Teilweise,
+fremde oder veränderte Assets führen zum Abbruch und werden nie automatisch
+überschrieben.
+
+## 2. Release lokal herunterladen und prüfen
+
+Voraussetzungen:
 
 - angemeldete GitHub CLI `gh`;
 - lokaler Checkout `/home/nanobot/home-assistant-voice-pe`;
-- Python drei;
-- isolierte ESPHome-Installation in
-  `~/.venvs/esphome-<VERSION>/bin/esphome`;
-- Netzwerkzugriff zum Voice PE nur für den späteren OTA-Schritt.
+- Python drei.
 
-Die ESPHome-Version wird nicht stillschweigend aktualisiert. Fehlt die im
-Release verlangte Version, muss sie zuerst explizit in einer isolierten
-virtuellen Umgebung installiert werden:
+Für Download und Prüfung ist keine lokale ESPHome-Installation nötig:
+
+```bash
+cd /home/nanobot/home-assistant-voice-pe
+python3 scripts/deploy_firmware_release.py vX.Y.Z
+```
+
+Das Script:
+
+1. lädt alle Assets des angegebenen Releases herunter;
+2. verlangt, dass der heruntergeladene Asset-Satz exakt `SHA256SUMS.txt`
+   entspricht, damit weder Dateien fehlen noch ungeprüfte Dateien verwendet
+   werden;
+3. prüft jede SHA-256-Prüfsumme;
+4. prüft Metadatenschema, Release-Tag und unveränderlichen Git-Commit;
+5. akzeptiert ausschließlich die Variante `standard-16mb`;
+6. prüft OTA- und Factory-Image zusätzlich gegen `firmware-release.json`;
+7. vergleicht die direkten Standard-YAML-Dateien bytegenau mit dem Source-Paket;
+8. legt die verifizierten Images unter
+   `~/.cache/voice-pe-firmware/<TAG>/verified/` ab;
+9. beendet sich ohne Flash.
+
+Kontrolle:
+
+```bash
+ls -lh "$HOME/.cache/voice-pe-firmware/vX.Y.Z/verified/"
+sha256sum "$HOME/.cache/voice-pe-firmware/vX.Y.Z/verified/"*.ota.bin
+```
+
+Zusätzlich müssen erfolgreich beziehungsweise vorhanden sein:
+
+- Source-Validation und GitHub-Release-Build;
+- passendes Bridge-Release mit demselben Tag;
+- erreichbares Voice PE;
+- bekannt gutes Rollback-OTA-Image;
+- dokumentierter USB-Recovery-Pfad.
+
+## 3. OTA nur nach ausdrücklicher Freigabe
+
+Das Release-Script kompiliert auch beim Flash nicht. Es nutzt das bereits
+verifizierte OTA-Image. Für den Upload benötigt es jedoch den zur Release-
+Metadatei passenden ESPHome-CLI-Stand. Fehlt die isolierte Installation:
 
 ```bash
 python3 -m venv "$HOME/.venvs/esphome-<VERSION>"
@@ -75,59 +142,7 @@ python3 -m venv "$HOME/.venvs/esphome-<VERSION>"
   "esphome==<VERSION>"
 ```
 
-## 1. Release lokal herunterladen, prüfen und kompilieren
-
-Der normale Ablauf baut die Standardvariante und flasht **nicht**:
-
-```bash
-cd /home/nanobot/home-assistant-voice-pe
-python3 scripts/deploy_firmware_release.py vX.Y.Z
-```
-
-Das Script führt dabei aus:
-
-1. alle Release-Assets mit `gh release download` herunterladen;
-2. jede Datei gegen `SHA256SUMS.txt` prüfen;
-3. Release-Tag und Commit gegen `firmware-release.json` prüfen;
-4. das Source-Paket sicher entpacken;
-5. die separat veröffentlichten YAML-Dateien bytegenau mit dem Source-Paket
-   vergleichen;
-6. die exakte ESPHome-Version prüfen;
-7. lokal `esphome compile` für den im Release festgelegten Entrypoint ausführen;
-8. OTA- und Factory-Image samt lokaler SHA-256-Werte unter
-   `~/.cache/voice-pe-firmware/<TAG>/build/` ablegen.
-
-Für nachweisliche Acht-Megabyte-Hardware:
-
-```bash
-python3 scripts/deploy_firmware_release.py vX.Y.Z --variant 8mb
-```
-
-Der lokale Build erzeugt außerdem `local-build.json`. Diese Datei dokumentiert
-Release-Commit, Variante, ESPHome-Version, Entrypoint und Prüfsummen der lokal
-erzeugten Images.
-
-## 2. Build prüfen
-
-Vor einer Flash-Freigabe mindestens kontrollieren:
-
-```bash
-cat "$HOME/.cache/voice-pe-firmware/vX.Y.Z/build/local-build.json"
-ls -lh "$HOME/.cache/voice-pe-firmware/vX.Y.Z/build/"
-```
-
-Zusätzlich müssen erfolgreich sein:
-
-- Source-Contract-Tests und YAML-Lint;
-- passendes Bridge-Release mit demselben Tag;
-- erreichbares Voice PE;
-- vorhandenes, bekannt gutes Rollback-OTA-Image;
-- dokumentierter USB-Recovery-Pfad.
-
-## 3. OTA nur nach ausdrücklicher Freigabe
-
-Erst nach Aschis ausdrücklicher Flash-Freigabe wird derselbe lokale Ablauf mit
-den Sicherheitsparametern gestartet:
+Erst nach Aschis ausdrücklicher Flash-Freigabe:
 
 ```bash
 cd /home/nanobot/home-assistant-voice-pe
@@ -138,10 +153,11 @@ python3 scripts/deploy_firmware_release.py vX.Y.Z \
   --flash-confirmation FLASH-KITCHEN-VOICE-PE
 ```
 
-Das Script kopiert das Rollback-Image in das lokale Build-Verzeichnis, bevor es
-`esphome upload` aufruft. Geräteadresse und Rollback-Datei dürfen nicht geraten
-werden. Geheimnisse oder OTA-Passwörter werden nicht in das Repository
-geschrieben.
+Das Script verifiziert das Release bei jedem Lauf erneut, kopiert das
+Rollback-Image in das lokale `verified`-Verzeichnis und ruft danach
+`esphome upload` mit dem veröffentlichten OTA-Image auf. Es führt keinen
+Compiler aus. Geräteadresse und Rollback-Datei dürfen nicht geraten werden;
+Geheimnisse oder OTA-Passwörter gehören nicht ins Repository.
 
 ## 4. Physische Verifikation
 
@@ -177,7 +193,7 @@ USB-Recovery über den offiziellen ESPHome-Webinstaller:
 https://esphome.github.io/home-assistant-voice-pe/
 ```
 
-Dafür ausschließlich ein passendes Factory-Image beziehungsweise den
+Dafür ausschließlich das passende Factory-Image beziehungsweise den
 offiziellen Webinstaller verwenden. Ein USB-Recovery kann eine erneute
 Einrichtung oder Adoption erfordern.
 

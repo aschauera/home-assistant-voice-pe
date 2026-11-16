@@ -44,26 +44,33 @@ Ein Verweis auf einen Branch oder auf `latest` reicht nicht, weil diese Ziele ve
      --json tagName,isPrerelease,targetCommitish,url
    ```
 
-2. Projektversion und Tag angleichen und den Zielcommit taggen. GitHub Actions
-   darf dabei keine Firmware kompilieren.
-3. Release veröffentlichen. Der Workflow `Publish firmware sources` hängt die
-   drei YAML-Dateien, das vollständige Source-Paket, `firmware-release.json` und
-   `SHA256SUMS.txt` an das Release.
-4. Die veröffentlichten Quellen mit
-   `scripts/deploy_firmware_release.py <TAG>` lokal auf dem Nanobot-Pi prüfen und
-   mit der im Release festgelegten ESPHome-Version kompilieren.
-5. Release-Notes müssen mindestens enthalten:
+2. Projektversion und Tag angleichen und den Zielcommit taggen.
+3. Release veröffentlichen. Erst das Ereignis `release.published` startet den
+   Workflow `Build and publish firmware release`. Pushes, Pull Requests und
+   manuelle Workflow-Aufrufe kompilieren keine Firmware.
+4. Der Workflow validiert die Quellen und kompiliert mit dem gepinnten
+offiziellen ESPHome-Workflow ausschließlich
+   `home-assistant-voice.factory.yaml` für das normale 16-MB-Gerät. Er hängt ein
+   OTA- und ein Factory-Image, die beiden Standard-YAML-Dateien, das
+   Source-Paket, `firmware-release.json` und gemeinsame `SHA256SUMS.txt` an das
+   Release. Die 8-MB-Variante gehört nicht zum Release. Vorhandene Assets werden
+   nur bei bytegenauer Identität akzeptiert und niemals automatisch ersetzt.
+5. Nach erfolgreichem Workflow die veröffentlichten Assets mit
+   `scripts/deploy_firmware_release.py <TAG>` auf dem Nanobot-Pi herunterladen
+   und vollständig prüfen. Dabei wird lokal nicht kompiliert und nicht
+   geflasht.
+6. Release-Notes müssen mindestens enthalten:
    - Firmware-SemVer `1.4.3`, gemeinsamer Tag `v1.4.3` und Commit;
    - direkten Link zur kompatiblen Bridge-Version;
-   - Status von Source-Tests und lokalem Build;
-   - Prüfsumme des lokal erzeugten OTA-Images;
+   - Status von Source-Tests und GitHub-Release-Build;
+   - Prüfsumme des veröffentlichten OTA-Images;
    - Hinweis auf OTA-, USB- und Rollback-Pfad.
-6. Ohne gemeinsame Hardwarevalidierung nur als Pre-Release veröffentlichen.
-7. Nach Veröffentlichung beide Release-Seiten erneut auf Tag, Commit, Status,
-   Source-Assets und gegenseitige Links prüfen.
+7. Ohne gemeinsame Hardwarevalidierung nur als Pre-Release veröffentlichen.
+8. Nach Veröffentlichung beide Release-Seiten erneut auf Tag, Commit, Status,
+   Assets und gegenseitige Links prüfen.
 
-Ein Release enthält keine in GitHub Actions kompilierten Binaries. OTA- und
-Factory-Images entstehen ausschließlich lokal. Ein erfolgreicher lokaler Build
+GitHub Actions kompiliert genau eine Firmwarevariante pro veröffentlichtem
+Release, flasht aber niemals ein Gerät. Ein erfolgreicher Release-Build
 berechtigt nicht zum Flashen; das produktive Gerät erfordert weiterhin Aschis
 ausdrückliche Freigabe.
 

@@ -37,14 +37,20 @@ Wichtige Regeln:
 
 ## Build- und Deployment-Grenze
 
-- GitHub Copilot und GitHub Actions dürfen in diesem Repository keine Firmware
-  kompilieren, keine Firmware-Binaries erzeugen und kein Gerät flashen.
-- Insbesondere dürfen GitHub Copilot und andere Cloud-Agenten weder
-  `esphome compile` noch `esphome run` oder `esphome upload` ausführen.
+- GitHub Copilot und andere Cloud-Agenten dürfen keine Firmware kompilieren,
+  keinen Build manuell starten und kein Gerät flashen. Der einzige erlaubte
+  Cloud-Build ist der deklarative Release-Workflow nach `release.published`.
+- Außerhalb dieses gepinnten Workflows niemals `esphome compile`, `esphome run`
+  oder `esphome upload` in GitHub Actions ausführen.
 - Pull Requests werden ausschließlich mit YAML-Lint und den lokalen
   Contract-/Unit-Tests validiert.
-- Release-Automation darf nur die versionierten YAML- und Source-Dateien
-  paketieren und mit Prüfsummen veröffentlichen.
-- Kompilierung und Flash erfolgen ausschließlich lokal durch Nanobot mit der im
-  Release festgelegten ESPHome-Version. Das Produktionsgerät darf weiterhin
-  nur nach ausdrücklicher Freigabe geflasht werden.
+- Firmware wird ausschließlich durch den Release-Workflow beim Ereignis
+  `release.published` kompiliert. Pushes, Pull Requests und manuelle Workflow-
+  Aufrufe dürfen keinen Firmware-Build starten.
+- Pro Release ausschließlich `home-assistant-voice.factory.yaml` für das
+  Standardgerät mit 16 MB bauen. Die 8-MB-Variante wird nicht veröffentlicht.
+- `scripts/deploy_firmware_release.py <TAG>` lädt die veröffentlichten Assets
+  herunter und prüft Tag, Commit, Asset-Satz und SHA-256; es kompiliert nicht.
+- GitHub Actions und Copilot dürfen nie flashen. Das Produktionsgerät darf nur
+  nach ausdrücklicher Freigabe, mit bekannt gutem Rollback-Image und exakter
+  Flash-Bestätigung aktualisiert werden.
